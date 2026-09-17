@@ -22,6 +22,10 @@ import java.util.HashMap;
 public class ApplicationSettings {
     final static Charset ENCODING = StandardCharsets.UTF_8;
 
+    public String initializationMethod; // default ili kmeans
+    public int numOfClusters; // broj klastera
+    public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
+
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
     public boolean minimizeRules, unguidedExpansion, allowSERed, useJoin, leftNegation, rightNegation, leftDisjunction, rightDisjunction, computeDMfromRules, networkInit, useNetworkAsBackground, useSplitTesting, removePValBeforeJoin;
     public double minJS, minAddRedJS, maxPval/*, JSImpWeight, PValImpWeight, AttDivImpWeight, ElemDivImpWeight, RuleSizeImpWeight*/, Alpha, percentageForTrain, RedStabilityWeight;
@@ -114,6 +118,9 @@ public class ApplicationSettings {
         containsView = 0; // 0 - no attribute constraints, 1 attr constr for W1, 2 attr constr for W2, 3 attr constr for both
         //typeOfLSTrees=1; //1 regresion, 0 classification, 2 network etc...
         //typeOfRSTrees=1; //1 regresion, 0 classification, 2 network etc...
+        initializationMethod = "default";
+        numOfClusters = 3;
+        viewForClustering = -1;
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -537,6 +544,26 @@ public class ApplicationSettings {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
                     initClusteringFileName = tmp[1];
+                } else if (line.contains("InitializationMethod")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    initializationMethod = tmp[1];
+                } else if (line.contains("NumOfClusters")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    numOfClusters = Integer.parseInt(tmp[1]);
+                } else if (line.contains("ViewForClustering")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("W1"))
+                        viewForClustering = 0;
+                    else if (tmp[1].equalsIgnoreCase("W2"))
+                        viewForClustering = 1;
+                    else if (tmp[1].equalsIgnoreCase("both"))
+                        viewForClustering = -1;
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for ViewForClustering: \""
+                                + tmp[1] + "\". allowed: W1, W2, both.");
                 } else if (line.contains("trainFileName")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
