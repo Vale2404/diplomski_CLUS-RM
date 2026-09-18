@@ -29,6 +29,6 @@ allowRightNeg = false
 allowLeftDisj = false
 allowRightDisj = false
 ruleSizeNormalization = 20
-InitializationMethod = kmeans
+InitializationMethod = default
 NumOfClusters = 4
 ViewForClustering = both

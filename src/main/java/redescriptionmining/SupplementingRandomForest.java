@@ -274,8 +274,11 @@ public class SupplementingRandomForest {
 
 			if (appset.initClusteringFileName.equals("")) {
 				//JinputInitial.arff
-				datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
-//				datJInit.initialClusteringGen1(appset, r);
+				if ("kmeans".equalsIgnoreCase(appset.initializationMethod))
+					datJInit.initialClusteringKmeans(appset, r);
+				else
+					datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
+//					datJInit.initialClusteringGen1(appset, r);
 			}
 
 			System.out.println("WIndexes size: " + datJ.W2indexs.size());
@@ -319,7 +322,7 @@ public class SupplementingRandomForest {
 
 			// RunInitW1S2
 
-			int w2IndexEnd = datJ.W2indexs.size() > 1 ? datJ.W2indexs.get(1) : datJInit.schema.getNbAttributes(); 
+			int w2IndexEnd = datJ.W2indexs.size() > 1 ? datJ.W2indexs.get(1) : datJ.schema.getNbAttributes() + 1;
 			
 			// view 2
 			RedescriptionMiningRunner runnerView2 = new RedescriptionMiningRunner(new String[] {"-forest", "view1.s"}, 1, datJ.W2indexs.get(0) + 1, w2IndexEnd,

@@ -562,8 +562,7 @@ public class ApplicationSettings {
                     else if (tmp[1].equalsIgnoreCase("both"))
                         viewForClustering = -1;
                     else
-                        throw new IllegalArgumentException("Illegal arg. for ViewForClustering: \""
-                                + tmp[1] + "\". allowed: W1, W2, both.");
+                        throw new IllegalArgumentException("Illegal arg. for ViewForClustering: \"" + tmp[1] + "\". allowed: W1, W2, both.");
                 } else if (line.contains("trainFileName")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();

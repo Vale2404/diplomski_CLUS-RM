@@ -6,6 +6,8 @@
 package redescriptionmining;
 
 
+import kmeans.Initializers;
+import kmeans.Kmeans;
 import si.ijs.kt.clus.data.ClusSchema;
 import si.ijs.kt.clus.data.io.ARFFFile;
 import si.ijs.kt.clus.data.io.ClusReader;
@@ -23,10 +25,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 /**
  * @author matej
@@ -753,6 +752,120 @@ public class DataSetCreator {
         data.setFromList(dataList);
         data.setSchema(schema);
         schema.setSettings(cset); 
+    }
+
+
+    protected void initialClusteringKmeans(ApplicationSettings appset, Random r) {
+        // metoda nista ne vraca vec mijenja data i schema
+        ArrayList<DataTuple> dataList = data.toArrayList();
+        int n = data.getNbRows();
+
+        // pozicija prvog atributa iz W2, ali brojana od 1
+        int firstW2 = W2indexs.get(0) - 1;
+
+        // u cols spremamo pozicije u m_Doubles onih numerickih atributa
+        // koji pripadaju trazenom pogledu (0 = W1, 1 = W2, -1 = oba)
+        ClusAttrType[] numericAttrs = schema.getNumericAttrUse(AttributeUseType.All);
+        ArrayList<Integer> cols = new ArrayList<>();
+
+        for (ClusAttrType t : numericAttrs) {
+            boolean inW1 = t.getIndex() < firstW2;
+            if (appset.viewForClustering == -1
+                    || (appset.viewForClustering == 0 && inW1)
+                    || (appset.viewForClustering == 1 && !inW1)) {
+                cols.add(t.getArrayIndex());
+            }
+        }
+
+        System.out.println("k-means initialization: k = " + appset.numOfClusters
+                + ", view = " + appset.viewForClustering
+                + ", number of used attrs = " + cols.size());
+
+        // X je skup podataka prepisan u obicnu matricu,
+        // koju ocekuje kmeans algoritam
+        int d = cols.size();
+        double[][] X = new double[n][d];
+
+        for (int i = 0; i < n; i++) {
+            double[] row = dataList.get(i).m_Doubles;
+            for (int f = 0; f < d; f++) {
+                X[i][f] = row[cols.get(f)];
+            }
+        }
+
+
+        // standardizacija matrice
+        for (int f = 0; f < d; f++) {
+            double mean = 0.0;
+            for (int i = 0; i < n; i++) {
+                mean += X[i][f];
+            }
+            mean /= n;
+
+            double var = 0.0;
+            for (int i = 0; i < n; i++) {
+                double diff = X[i][f] - mean;
+                var += diff * diff;
+            }
+            double sd = Math.sqrt(var / n);
+
+            // konstantan stupac ne nosi informaciju, izbjegavamo dijeljenje s nulom
+            if (sd > 0.0) {
+                for (int i = 0; i < n; i++) {
+                    X[i][f] = (X[i][f] - mean) / sd;
+                }
+            } else {
+                for (int i = 0; i < n; i++) {
+                    X[i][f] = 0.0;
+                }
+            }
+        }
+
+        // poziv kmeansa
+        int k = appset.numOfClusters;
+        Kmeans kmeans = new Kmeans(k, new Initializers.Forgy());
+        Kmeans.Result result = kmeans.fit(X, new Random(42));
+        int[] labels = result.labels;
+
+        System.out.println("k-means rezultat: " + result);
+
+        int[] clusterSizes = new int[k];
+        for (int i = 0; i < n; i++)
+            clusterSizes[labels[i]]++;
+        System.out.println("Velicine klastera: " + Arrays.toString(clusterSizes));
+
+        // k novih atributa u shemu
+        int lastDouble = schema.getNumericAttrUse(AttributeUseType.All).length;
+
+        for (int j = 0; j < k; j++) {
+            schema.addAttrType(new NumericAttrType("target" + (j + 1)));
+            schema.getAttrType(schema.getNbAttributes() - 1).setArrayIndex(lastDouble + j);
+        }
+
+        System.out.println("Novi broj atributa u shemi: " + schema.getNbAttributes()
+                + ", prvi ciljni arrayIndex: " + lastDouble);
+
+        // prosirenje redaka
+        ArrayList<DataTuple> newList = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            DataTuple tup = dataList.get(i).deepCloneTuple();
+
+            double[] arow = new double[lastDouble + k];
+            System.arraycopy(tup.m_Doubles, 0, arow, 0, lastDouble);
+            arow[lastDouble + labels[i]] = 1.0;
+
+            tup.m_Doubles = arow;
+            newList.add(tup);
+        }
+
+        data.setFromList(newList);
+        data.setSchema(schema);
+        schema.setSettings(cset);
+
+        System.out.println("Duljina m_Doubles nakon prosirenja: "
+                + data.toArrayList().get(0).m_Doubles.length);
+
+
     }
 
 
