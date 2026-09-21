@@ -6,6 +6,7 @@
 package redescriptionmining;
 
 
+import kmeans.Initializer;
 import kmeans.Initializers;
 import kmeans.Kmeans;
 import si.ijs.kt.clus.data.ClusSchema;
@@ -823,7 +824,14 @@ public class DataSetCreator {
 
         // poziv kmeansa
         int k = appset.numOfClusters;
-        Kmeans kmeans = new Kmeans(k, new Initializers.Forgy());
+
+        Initializer kmeansInit = "Kmeans++".equalsIgnoreCase(appset.kmeansInitMethod)
+                ? new Initializers.KmeansPlusPlus()
+                : new Initializers.Forgy();
+
+        System.out.println("k-means initializer: " + kmeansInit.name());
+
+        Kmeans kmeans = new Kmeans(k, kmeansInit);
         Kmeans.Result result = kmeans.fit(X, new Random(42));
         int[] labels = result.labels;
 

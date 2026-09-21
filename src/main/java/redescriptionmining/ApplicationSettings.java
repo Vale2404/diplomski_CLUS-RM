@@ -23,6 +23,7 @@ public class ApplicationSettings {
     final static Charset ENCODING = StandardCharsets.UTF_8;
 
     public String initializationMethod; // default ili kmeans
+    public String kmeansInitMethod;  // default je forgy, ili kmeans++
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
 
@@ -563,6 +564,15 @@ public class ApplicationSettings {
                         viewForClustering = -1;
                     else
                         throw new IllegalArgumentException("Illegal arg. for ViewForClustering: \"" + tmp[1] + "\". allowed: W1, W2, both.");
+                } else if (line.contains("KmeansInitMethod")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("KMeans++") || tmp[1].equalsIgnoreCase("KMeansPlusPlus"))
+                        kmeansInitMethod = "Kmeans++";
+                    else if (tmp[1].equalsIgnoreCase("Forgy"))
+                        kmeansInitMethod = "Forgy";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for KmeansInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++.");
                 } else if (line.contains("trainFileName")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
