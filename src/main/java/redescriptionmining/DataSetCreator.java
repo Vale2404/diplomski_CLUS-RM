@@ -829,7 +829,7 @@ public class DataSetCreator {
     // entitet sum (npr. kod DBSCAN-a). Redak suma dobiva same nule na
     // ciljnim atributima, tj. ne pripada nijednom klasteru.
     // Metoda nista ne vraca, vec mijenja data i schema.
-    private void addClusterTargets(int[] labels, int k) {
+    private void addClusterTargets(int[] labels, int k, ApplicationSettings appset) {
         int n = labels.length;
         if (n != data.getNbRows())
             throw new IllegalStateException("Broj oznaka razlikuje se od broja redaka u podacima.");
@@ -891,6 +891,8 @@ public class DataSetCreator {
         data.setSchema(schema);
         schema.setSettings(cset);
 
+        appset.numInitTargets = k;
+
         System.out.println("Duljina m_Doubles nakon prosirenja: "
                 + data.toArrayList().get(0).m_Doubles.length);
     }
@@ -911,7 +913,7 @@ public class DataSetCreator {
         int[] labels = result.labels;
         System.out.println("k-means rezultat: " + result);
 
-        addClusterTargets(labels, k);
+        addClusterTargets(labels, k, appset);
     }
 
 

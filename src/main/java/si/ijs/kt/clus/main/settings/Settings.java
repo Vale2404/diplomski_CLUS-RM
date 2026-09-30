@@ -496,8 +496,8 @@ public class Settings implements Serializable {
     	
     	// [Attributes]
     	m_SettAttribute.setDescriptive((W2indexStart - 1) + "-" + (W2indexEnd - 1));
-        if ("kmeans".equalsIgnoreCase(appset.initializationMethod) && appset.numOfClusters > 1) {
-            String targets = (numAttr + 1) + "-" + (numAttr + appset.numOfClusters);
+        if (appset.numInitTargets > 1) {
+            String targets = (numAttr + 1) + "-" + (numAttr + appset.numInitTargets);
             m_SettAttribute.setClustering(targets);
             m_SettAttribute.setTarget(targets);
         }

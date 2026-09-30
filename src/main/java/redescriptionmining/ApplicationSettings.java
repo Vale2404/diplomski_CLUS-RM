@@ -23,6 +23,11 @@ public class ApplicationSettings {
     final static Charset ENCODING = StandardCharsets.UTF_8;
 
     public String initializationMethod; // default ili kmeans
+
+    // stvarni broj ciljnih atributa koje je dodala inicijalizacija klasteriranjem
+    // (postavlja se u kodu, ne cita se iz datoteke)
+    public int numInitTargets;
+
     public String kmeansInitMethod;  // default je forgy, ili kmeans++
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
@@ -120,6 +125,7 @@ public class ApplicationSettings {
         //typeOfLSTrees=1; //1 regresion, 0 classification, 2 network etc...
         //typeOfRSTrees=1; //1 regresion, 0 classification, 2 network etc...
         initializationMethod = "default";
+        numInitTargets = 1;
         numOfClusters = 3;
         viewForClustering = -1;
     }
