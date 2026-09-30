@@ -6,6 +6,7 @@
 package redescriptionmining;
 
 
+import dbscan.Dbscan;
 import kmeans.Initializer;
 import kmeans.Initializers;
 import kmeans.Kmeans;
@@ -914,6 +915,40 @@ public class DataSetCreator {
         System.out.println("k-means rezultat: " + result);
 
         addClusterTargets(labels, k, appset);
+    }
+
+    protected void initialClusteringDbscan(ApplicationSettings appset) {
+        double[][] X = buildClusteringMatrix(appset);
+        int d = X[0].length;
+
+        // ako minPts nije zadan, koristimo uobicajenu heuristiku 2*d
+        int minPts = appset.dbscanMinPts > 0 ? appset.dbscanMinPts : 2 * d;
+
+        // k-distance kvantili kao pomoc pri odabiru eps-a: za eps jednak
+        // q-kvantilu jezgreno je priblizno q udio tocaka.
+        // Locale.ROOT za ispis koristi decimalnu tocku (moze se izravno
+        // kopirati u .set datoteku).
+        double[] kDist = Dbscan.kDistances(X, minPts, dbscan.Distance.EUCLIDEAN);
+        Arrays.sort(kDist);
+        StringBuilder sb = new StringBuilder("k-distance kvantili (minPts = " + minPts + "):");
+        for (double q : new double[]{0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99}) {
+            int idx = (int) Math.floor(q * (kDist.length - 1));
+            sb.append(String.format(Locale.ROOT, " %d%%=%.3f", Math.round(q * 100), kDist[idx]));
+        }
+        System.out.println(sb);
+
+        if (appset.dbscanEps <= 0)
+            throw new IllegalArgumentException("Za InitializationMethod = dbscan zadaj DbscanEps > 0 "
+                    + "(pomoc: k-distance kvantili ispisani iznad).");
+
+        System.out.println("DBSCAN initialization: eps = " + appset.dbscanEps
+                + ", minPts = " + minPts + (appset.dbscanMinPts > 0 ? "" : " (heuristika 2*d)"));
+
+        Dbscan db = new Dbscan(appset.dbscanEps, minPts);
+        Dbscan.Result result = db.fit(X);
+        System.out.println(result);
+
+        addClusterTargets(result.labels, result.numClusters, appset);
     }
 
 

@@ -175,6 +175,28 @@ public class Dbscan {
         return neighbors;
     }
 
+    // Za svaku tocku vraca udaljenost do njezinog minPts-tog najblizeg
+    // susjeda, pri cemu se sama tocka broji kao prvi susjed (udaljenost 0),
+    // isto kao u regionQuery. Zato vrijedi: tocka i je jezgrena za dani eps
+    // tocno onda kada je kDist[i] <= eps. Koristi se za odabir eps-a
+    // (k-distance graf): ako eps postavimo na q-kvantil ovih vrijednosti,
+    // jezgreno je priblizno q udio tocaka.
+    public static double[] kDistances(double[][] X, int minPts, Distance distance) {
+        int n = X.length;
+        if (minPts <= 0 || minPts > n)
+            throw new IllegalArgumentException("minPts mora biti iz [1, n]");
+
+        double[] kDist = new double[n];
+        double[] dists = new double[n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++)
+                dists[j] = distance.dist(X[i], X[j]);
+            java.util.Arrays.sort(dists);
+            kDist[i] = dists[minPts - 1];
+        }
+        return kDist;
+    }
+
     public static final class Result {
         // -1 = noise, inace indeks klastera (0, 1, 2, ...).
         public final int[] labels;

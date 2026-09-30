@@ -32,6 +32,10 @@ public class ApplicationSettings {
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
 
+    public double dbscanEps; // polumjer okoline za DBSCAN, mora se zadati za InitializationMethod = dbscan
+    public int dbscanMinPts; // minPts za DBSCAN; <= 0 znaci heuristiku 2*d
+
+
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
     public boolean minimizeRules, unguidedExpansion, allowSERed, useJoin, leftNegation, rightNegation, leftDisjunction, rightDisjunction, computeDMfromRules, networkInit, useNetworkAsBackground, useSplitTesting, removePValBeforeJoin;
     public double minJS, minAddRedJS, maxPval/*, JSImpWeight, PValImpWeight, AttDivImpWeight, ElemDivImpWeight, RuleSizeImpWeight*/, Alpha, percentageForTrain, RedStabilityWeight;
@@ -128,6 +132,8 @@ public class ApplicationSettings {
         numInitTargets = 1;
         numOfClusters = 3;
         viewForClustering = -1;
+        dbscanEps = -1;
+        dbscanMinPts = -1;
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -555,6 +561,11 @@ public class ApplicationSettings {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
                     initializationMethod = tmp[1];
+                    if (!initializationMethod.equalsIgnoreCase("default")
+                            && !initializationMethod.equalsIgnoreCase("kmeans")
+                            && !initializationMethod.equalsIgnoreCase("dbscan"))
+                        throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
+                                + tmp[1] + "\". allowed: default, kmeans, dbscan.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -579,6 +590,19 @@ public class ApplicationSettings {
                         kmeansInitMethod = "Forgy";
                     else
                         throw new IllegalArgumentException("Illegal arg. for KmeansInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++.");
+                } else if (line.contains("DbscanEps")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    dbscanEps = Double.parseDouble(tmp[1]);
+                    if (dbscanEps <= 0)
+                        throw new IllegalArgumentException("Illegal arg. for DbscanEps: \"" + tmp[1] + "\". must be > 0.");
+                }
+                else if (line.contains("DbscanMinPts")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    dbscanMinPts = Integer.parseInt(tmp[1]);
+                    if (dbscanMinPts <= 0)
+                        throw new IllegalArgumentException("Illegal arg. for DbscanMinPts: \"" + tmp[1] + "\". must be > 0.");
                 } else if (line.contains("trainFileName")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();

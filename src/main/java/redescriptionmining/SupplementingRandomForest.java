@@ -276,6 +276,8 @@ public class SupplementingRandomForest {
 				//JinputInitial.arff
 				if ("kmeans".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringKmeans(appset, r);
+				else if ("dbscan".equalsIgnoreCase(appset.initializationMethod))
+					datJInit.initialClusteringDbscan(appset);
 				else
 					datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
 //					datJInit.initialClusteringGen1(appset, r);
