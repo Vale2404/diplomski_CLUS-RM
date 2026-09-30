@@ -755,9 +755,8 @@ public class DataSetCreator {
         schema.setSettings(cset); 
     }
 
-
-    protected void initialClusteringKmeans(ApplicationSettings appset, Random r) {
-        // metoda nista ne vraca vec mijenja data i schema
+    private double[][] buildClusteringMatrix(ApplicationSettings appset) {
+        // odabir stupaca pogleda + prepisivanje u X + standardizacija
         ArrayList<DataTuple> dataList = data.toArrayList();
         int n = data.getNbRows();
 
@@ -778,12 +777,11 @@ public class DataSetCreator {
             }
         }
 
-        System.out.println("k-means initialization: k = " + appset.numOfClusters
-                + ", view = " + appset.viewForClustering
+        System.out.println("view = " + appset.viewForClustering
                 + ", number of used attrs = " + cols.size());
 
         // X je skup podataka prepisan u obicnu matricu,
-        // koju ocekuje kmeans algoritam
+        // koju ocekuje algoritam klasteriranja.
         int d = cols.size();
         double[][] X = new double[n][d];
 
@@ -821,28 +819,49 @@ public class DataSetCreator {
                 }
             }
         }
+        return X;
+    }
 
-        // poziv kmeansa
-        int k = appset.numOfClusters;
 
-        Initializer kmeansInit = "Kmeans++".equalsIgnoreCase(appset.kmeansInitMethod)
-                ? new Initializers.KmeansPlusPlus()
-                : new Initializers.Forgy();
+    // Dodaje rezultat klasteriranja u CLUS podatke kao k novih ciljnih
+    // atributa target1..targetk.
+    // labels[i] je indeks klastera entiteta i (0..k-1) ili -1 ako je
+    // entitet sum (npr. kod DBSCAN-a). Redak suma dobiva same nule na
+    // ciljnim atributima, tj. ne pripada nijednom klasteru.
+    // Metoda nista ne vraca, vec mijenja data i schema.
+    private void addClusterTargets(int[] labels, int k) {
+        int n = labels.length;
+        if (n != data.getNbRows())
+            throw new IllegalStateException("Broj oznaka razlikuje se od broja redaka u podacima.");
+        if (k <= 0)
+            throw new IllegalStateException("Klasteriranje nije pronaslo nijedan klaster " +
+                    "(sve tocke su sum). Kod DBSCAN-a povecaj eps ili smanji minPts.");
 
-        System.out.println("k-means initializer: " + kmeansInit.name());
-
-        Kmeans kmeans = new Kmeans(k, kmeansInit);
-        Kmeans.Result result = kmeans.fit(X, new Random(42));
-        int[] labels = result.labels;
-
-        System.out.println("k-means rezultat: " + result);
-
+        // provjera oznaka i brojanje velicina klastera i suma.
         int[] clusterSizes = new int[k];
-        for (int i = 0; i < n; i++)
-            clusterSizes[labels[i]]++;
-        System.out.println("Velicine klastera: " + Arrays.toString(clusterSizes));
+        int numNoise = 0;
+        for (int i = 0; i < n; i++) {
+            int label = labels[i];
+            if (label == -1)
+                numNoise++;
+            else if (label >= 0 && label < k)
+                clusterSizes[label]++;
+            else
+                throw new IllegalStateException("Neispravna oznaka klastera " + label
+                        + " za redak " + i + " (dozvoljeno -1.." + (k - 1) + ").");
+        }
+        System.out.println("Velicine klastera: " + Arrays.toString(clusterSizes) + ", sum: " + numNoise);
 
-        // k novih atributa u shemu
+        // upozorenja, ne prekidaju izvodenje.
+        if (k == 1 && numNoise == 0)
+            System.out.println("UPOZORENJE: samo jedan klaster bez suma, ciljni atribut "
+                    + "je konstantan i PCT iz njega nece nista nauciti.");
+        for (int j = 0; j < k; j++) {
+            if (clusterSizes[j] == 0)
+                System.out.println("UPOZORENJE: klaster " + j + " je prazan.");
+        }
+
+        // k novih atributa u shemu.
         int lastDouble = schema.getNumericAttrUse(AttributeUseType.All).length;
 
         for (int j = 0; j < k; j++) {
@@ -854,13 +873,15 @@ public class DataSetCreator {
                 + ", prvi ciljni arrayIndex: " + lastDouble);
 
         // prosirenje redaka
+        ArrayList<DataTuple> dataList = data.toArrayList();
         ArrayList<DataTuple> newList = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             DataTuple tup = dataList.get(i).deepCloneTuple();
-
+            // novo polje je vec popunjeno nulama, pa za sum ne treba nista upisivati
             double[] arow = new double[lastDouble + k];
             System.arraycopy(tup.m_Doubles, 0, arow, 0, lastDouble);
-            arow[lastDouble + labels[i]] = 1.0;
+            if (labels[i] >= 0)
+                arow[lastDouble + labels[i]] = 1.0;
 
             tup.m_Doubles = arow;
             newList.add(tup);
@@ -872,8 +893,25 @@ public class DataSetCreator {
 
         System.out.println("Duljina m_Doubles nakon prosirenja: "
                 + data.toArrayList().get(0).m_Doubles.length);
+    }
 
+    protected void initialClusteringKmeans(ApplicationSettings appset, Random r) {
+        double[][] X = buildClusteringMatrix(appset);
+        int k = appset.numOfClusters;
 
+        Initializer kmeansInit = "Kmeans++".equalsIgnoreCase(appset.kmeansInitMethod)
+                ? new Initializers.KmeansPlusPlus()
+                : new Initializers.Forgy();
+
+        System.out.println("k-means initialization: k = " + k
+                + ", initializer: " + kmeansInit.name());
+
+        Kmeans kmeans = new Kmeans(k, kmeansInit);
+        Kmeans.Result result = kmeans.fit(X, new Random(42));
+        int[] labels = result.labels;
+        System.out.println("k-means rezultat: " + result);
+
+        addClusterTargets(labels, k);
     }
 
 
