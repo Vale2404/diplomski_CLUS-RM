@@ -823,6 +823,58 @@ public class DataSetCreator {
         return X;
     }
 
+    private double[][] buildCategoricalMatrix(ApplicationSettings appset) {
+        ArrayList<DataTuple> dataList = data.toArrayList();
+        int n = data.getNbRows();
+
+        // pozicija prvog atributa iz W2, ali brojana od 1
+        int firstW2 = W2indexs.get(0) - 1;
+
+        // nominalni atributi koji pripadaju trazenom pogledu
+        // (0 = W1, 1 = W2, -1 = oba)
+        NominalAttrType[] nominalAttrs = schema.getNominalAttrUse(AttributeUseType.All);
+        ArrayList<NominalAttrType> attrs = new ArrayList<>();
+
+        for (NominalAttrType t : nominalAttrs) {
+            boolean inW1 = t.getIndex() < firstW2;
+            if (appset.viewForClustering == -1
+                    || (appset.viewForClustering == 0 && inW1)
+                    || (appset.viewForClustering == 1 && !inW1)) {
+                attrs.add(t);
+            }
+        }
+
+        int d = attrs.size();
+        System.out.println("view = " + appset.viewForClustering + ", number of used nominal attrs = " + d);
+
+        if (d == 0)
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema " + "nominalnih atributa, k-modes nije primjenjiv.");
+
+        StringBuilder sb = new StringBuilder("Nominalni atributi (ime:broj vrijednosti):");
+        for (NominalAttrType t : attrs)
+            sb.append(' ').append(t.getName()).append(':').append(t.getNbValues());
+        System.out.println(sb);
+
+
+        // X je skup podataka prepisan u obicnu matricu. Kodovi kategorija
+        // su vec 0..getNbValues()-1, sto je upravo oblik koji ocekuje k-modes.
+        double[][] X = new double[n][d];
+        for (int i = 0; i < n; i++) {
+            DataTuple tuple = dataList.get(i);
+            for (int f = 0; f < d; f++) {
+                NominalAttrType t = attrs.get(f);
+                // CLUS nedostajucu vrijednost kodira brojem >= getNbValues(),
+                // pa bi je k-modes tiho shvatio kao jos jednu kategoriju.
+                if (t.isMissing(tuple))
+                    throw new IllegalStateException("Nedostajuca vrijednost u retku " + i
+                            + ", atribut " + t.getName()
+                            + ". k-modes zasad ne podrzava nedostajuce vrijednosti.");
+                X[i][f] = t.getNominal(tuple);
+            }
+        }
+        return X;
+    }
+
 
     // Dodaje rezultat klasteriranja u CLUS podatke kao k novih ciljnih
     // atributa target1..targetk.
@@ -913,6 +965,36 @@ public class DataSetCreator {
         LloydClustering.Result result = kmeans.fit(X, new Random(42));
         int[] labels = result.labels();
         System.out.println("k-means rezultat: " + result);
+
+        addClusterTargets(labels, k, appset);
+    }
+
+    protected void initialClusteringKmodes(ApplicationSettings appset, Random r) {
+        double[][] X = buildCategoricalMatrix(appset);
+        int k = appset.numOfClusters;
+
+        Initializer kmodesInit;
+        switch (appset.kmodesInitMethod) {
+            case "Forgy":
+                kmodesInit = new Initializers.Forgy();
+                break;
+            case "Kmeans++":
+                kmodesInit = new Initializers.KmeansPlusPlus();
+                break;
+            case "Cao":
+                kmodesInit = new Initializers.Cao();
+                break;
+            default:
+                throw new IllegalStateException("Nepoznat KmodesInitMethod: " + appset.kmodesInitMethod);
+        }
+
+        System.out.println("k-modes initialization: k = " + k
+                + ", initializer: " + kmodesInit.name());
+
+        LloydClustering kmodes = LloydClustering.kModes(k, kmodesInit);
+        LloydClustering.Result result = kmodes.fit(X, new Random(42));
+        int[] labels = result.labels();
+        System.out.println("k-modes rezultat: " + result);
 
         addClusterTargets(labels, k, appset);
     }

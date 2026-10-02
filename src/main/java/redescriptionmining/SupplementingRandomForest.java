@@ -279,7 +279,7 @@ public class SupplementingRandomForest {
 				else if ("dbscan".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringDbscan(appset);
 				else if ("kmodes".equalsIgnoreCase(appset.initializationMethod))
-					throw new UnsupportedOperationException("k-modes jos nije implementiran");
+					datJInit.initialClusteringKmodes(appset, r);
 				else if ("default".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
 //					datJInit.initialClusteringGen1(appset, r);
