@@ -278,9 +278,14 @@ public class SupplementingRandomForest {
 					datJInit.initialClusteringKmeans(appset, r);
 				else if ("dbscan".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringDbscan(appset);
-				else
+				else if ("kmodes".equalsIgnoreCase(appset.initializationMethod))
+					throw new UnsupportedOperationException("k-modes jos nije implementiran");
+				else if ("default".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
 //					datJInit.initialClusteringGen1(appset, r);
+				else
+					throw new IllegalStateException("Nepoznata InitializationMethod: "
+							+ appset.initializationMethod);
 			}
 
 			System.out.println("WIndexes size: " + datJ.W2indexs.size());

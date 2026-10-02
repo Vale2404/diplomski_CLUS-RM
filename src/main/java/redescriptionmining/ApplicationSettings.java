@@ -22,13 +22,14 @@ import java.util.HashMap;
 public class ApplicationSettings {
     final static Charset ENCODING = StandardCharsets.UTF_8;
 
-    public String initializationMethod; // default ili kmeans
+    public String initializationMethod; // default, kmeans ili kmodes
 
     // stvarni broj ciljnih atributa koje je dodala inicijalizacija klasteriranjem
     // (postavlja se u kodu, ne cita se iz datoteke)
     public int numInitTargets;
 
     public String kmeansInitMethod;  // default je forgy, ili kmeans++
+    public String kmodesInitMethod; //  default je forgy, a moze biti i kmeans++ i cao
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
 
@@ -129,6 +130,8 @@ public class ApplicationSettings {
         //typeOfLSTrees=1; //1 regresion, 0 classification, 2 network etc...
         //typeOfRSTrees=1; //1 regresion, 0 classification, 2 network etc...
         initializationMethod = "default";
+        kmeansInitMethod = "Forgy";
+        kmodesInitMethod = "Forgy";
         numInitTargets = 1;
         numOfClusters = 3;
         viewForClustering = -1;
@@ -563,9 +566,10 @@ public class ApplicationSettings {
                     initializationMethod = tmp[1];
                     if (!initializationMethod.equalsIgnoreCase("default")
                             && !initializationMethod.equalsIgnoreCase("kmeans")
+                            && !initializationMethod.equalsIgnoreCase("kmodes")
                             && !initializationMethod.equalsIgnoreCase("dbscan"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
-                                + tmp[1] + "\". allowed: default, kmeans, dbscan.");
+                                + tmp[1] + "\". allowed: default, kmeans, kmodes, dbscan.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -590,6 +594,17 @@ public class ApplicationSettings {
                         kmeansInitMethod = "Forgy";
                     else
                         throw new IllegalArgumentException("Illegal arg. for KmeansInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++.");
+                } else if (line.contains("KmodesInitMethod")) {
+                        String tmp[] = line.split("=");
+                        tmp[1] = tmp[1].trim();
+                        if (tmp[1].equalsIgnoreCase("KMeans++") || tmp[1].equalsIgnoreCase("KMeansPlusPlus"))
+                            kmodesInitMethod = "Kmeans++";
+                        else if (tmp[1].equalsIgnoreCase("Forgy"))
+                            kmodesInitMethod = "Forgy";
+                        else if (tmp[1].equalsIgnoreCase("Cao"))
+                            kmodesInitMethod = "Cao";
+                        else
+                            throw new IllegalArgumentException("Illegal arg. for KmodesInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++, Cao.");
                 } else if (line.contains("DbscanEps")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
