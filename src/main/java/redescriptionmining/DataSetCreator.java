@@ -7,9 +7,9 @@ package redescriptionmining;
 
 
 import dbscan.Dbscan;
-import kmeans.Initializer;
-import kmeans.Initializers;
-import kmeans.Kmeans;
+import clusteringpartitional.Initializer;
+import clusteringpartitional.Initializers;
+import clusteringpartitional.LloydClustering;
 import si.ijs.kt.clus.data.ClusSchema;
 import si.ijs.kt.clus.data.io.ARFFFile;
 import si.ijs.kt.clus.data.io.ClusReader;
@@ -909,9 +909,9 @@ public class DataSetCreator {
         System.out.println("k-means initialization: k = " + k
                 + ", initializer: " + kmeansInit.name());
 
-        Kmeans kmeans = new Kmeans(k, kmeansInit);
-        Kmeans.Result result = kmeans.fit(X, new Random(42));
-        int[] labels = result.labels;
+        LloydClustering kmeans = LloydClustering.kMeans(k, kmeansInit);
+        LloydClustering.Result result = kmeans.fit(X, new Random(42));
+        int[] labels = result.labels();
         System.out.println("k-means rezultat: " + result);
 
         addClusterTargets(labels, k, appset);
