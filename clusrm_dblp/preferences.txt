@@ -1,0 +1,2 @@
+JSImp PValImp AttDivImp ElemDivImp ECoverage
+0.2 0.2 0.2 0.2 0.2

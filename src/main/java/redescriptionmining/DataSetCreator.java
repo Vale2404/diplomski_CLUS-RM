@@ -932,7 +932,10 @@ public class DataSetCreator {
             DataTuple tup = dataList.get(i).deepCloneTuple();
             // novo polje je vec popunjeno nulama, pa za sum ne treba nista upisivati
             double[] arow = new double[lastDouble + k];
-            System.arraycopy(tup.m_Doubles, 0, arow, 0, lastDouble);
+            // Skup bez numerickih atributa (npr. DBLP) ima m_Doubles == null,
+            // a arraycopy baca NullPointerException cim je izvorno polje null.
+            if (lastDouble > 0)
+                System.arraycopy(tup.m_Doubles, 0, arow, 0, lastDouble);
             if (labels[i] >= 0)
                 arow[lastDouble + labels[i]] = 1.0;
 
