@@ -58,7 +58,7 @@ public class Dbscan {
 
     // Glavna metoda. Prima matricu X dimenzija n*d (n tocaka, svaka d
     // koordinata) i vraca Result sa oznakama klastera za svaku tocku.
-    // Za razliku od Kmeans.fit, ovdje nema potrebe za generatorom
+    // Za razliku od LloydClustering.fit, ovdje nema potrebe za generatorom
     // slucajnih brojeva - DBSCAN je deterministican s obzirom na ulazne
     // podatke i parametre (jedina "nasumicnost" je redoslijed obilaska
     // tocaka, koji ovdje uvijek ide 0..n-1, pa je rezultat u potpunosti

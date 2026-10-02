@@ -32,4 +32,4 @@ ruleSizeNormalization = 20
 InitializationMethod = kmeans
 NumOfClusters = 3
 ViewForClustering = W1
-KmeansInitMethod = forgy
+KmeansInitMethod = kmeans++
