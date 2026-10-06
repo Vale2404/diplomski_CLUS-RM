@@ -280,6 +280,8 @@ public class SupplementingRandomForest {
 					datJInit.initialClusteringDbscan(appset);
 				else if ("kmodes".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringKmodes(appset, r);
+				else if ("hierarchical".equalsIgnoreCase(appset.initializationMethod))
+					datJInit.initialClusteringHierarchical(appset);
 				else if ("default".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.writeArffInitialClusteringGen1(appset, r); // so we actually save init file
 //					datJInit.initialClusteringGen1(appset, r);

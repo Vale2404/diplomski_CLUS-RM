@@ -33,6 +33,9 @@ public class ApplicationSettings {
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
 
+    public String hierarchicalLinkage;  // Single, Complete, Average ili Ward
+    public String hierarchicalDistance;  // Euclidean ili Hamming
+
     public double dbscanEps; // polumjer okoline za DBSCAN, mora se zadati za InitializationMethod = dbscan
     public int dbscanMinPts; // minPts za DBSCAN; <= 0 znaci heuristiku 2*d
 
@@ -135,6 +138,8 @@ public class ApplicationSettings {
         numInitTargets = 1;
         numOfClusters = 3;
         viewForClustering = -1;
+        hierarchicalLinkage = "Average";
+        hierarchicalDistance = "Euclidean";
         dbscanEps = -1;
         dbscanMinPts = -1;
     }
@@ -567,9 +572,10 @@ public class ApplicationSettings {
                     if (!initializationMethod.equalsIgnoreCase("default")
                             && !initializationMethod.equalsIgnoreCase("kmeans")
                             && !initializationMethod.equalsIgnoreCase("kmodes")
-                            && !initializationMethod.equalsIgnoreCase("dbscan"))
+                            && !initializationMethod.equalsIgnoreCase("dbscan")
+                            && !initializationMethod.equalsIgnoreCase("hierarchical"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
-                                + tmp[1] + "\". allowed: default, kmeans, kmodes, dbscan.");
+                                + tmp[1] + "\". allowed: default, kmeans, kmodes, dbscan, hierarchical.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -611,13 +617,28 @@ public class ApplicationSettings {
                     dbscanEps = Double.parseDouble(tmp[1]);
                     if (dbscanEps <= 0)
                         throw new IllegalArgumentException("Illegal arg. for DbscanEps: \"" + tmp[1] + "\". must be > 0.");
-                }
-                else if (line.contains("DbscanMinPts")) {
+                } else if (line.contains("DbscanMinPts")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
                     dbscanMinPts = Integer.parseInt(tmp[1]);
                     if (dbscanMinPts <= 0)
                         throw new IllegalArgumentException("Illegal arg. for DbscanMinPts: \"" + tmp[1] + "\". must be > 0.");
+                } else if (line.contains("HierarchicalLinkage")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("single")) hierarchicalLinkage = "Single";
+                    else if (tmp[1].equalsIgnoreCase("complete")) hierarchicalLinkage = "Complete";
+                    else if (tmp[1].equalsIgnoreCase("average")) hierarchicalLinkage = "Average";
+                    else if (tmp[1].equalsIgnoreCase("ward")) hierarchicalLinkage = "Ward";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for HierarchicalLinkage: \"" + tmp[1] + "\". allowed: Single, Complete, Average, Ward.");
+                } else if (line.contains("HierarchicalDistance")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("euclidean")) hierarchicalDistance = "Euclidean";
+                    else if (tmp[1].equalsIgnoreCase("hamming")) hierarchicalDistance = "Hamming";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for HierarchicalDistance: \"" + tmp[1] + "\". allowed: Euclidean, Hamming.");
                 } else if (line.contains("trainFileName")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();

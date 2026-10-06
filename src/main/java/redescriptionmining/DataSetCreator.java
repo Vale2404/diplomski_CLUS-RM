@@ -6,6 +6,8 @@
 package redescriptionmining;
 
 
+import clusteringhierarchical.AgglomerativeClustering;
+import clusteringhierarchical.Merge;
 import dbscan.Dbscan;
 import clusteringpartitional.Initializer;
 import clusteringpartitional.Initializers;
@@ -1036,6 +1038,60 @@ public class DataSetCreator {
         addClusterTargets(result.labels, result.numClusters, appset);
     }
 
+    protected void initialClusteringHierarchical(ApplicationSettings appset) {
+        boolean hamming = "Hamming".equals(appset.hierarchicalDistance);
+        double[][] X = hamming ? buildCategoricalMatrix(appset) : buildClusteringMatrix(appset);
+        int n = X.length;
+        int k = appset.numOfClusters;
+
+        if (X[0].length == 0)
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
+                    + "numerickih atributa, euklidsko hijerarhijsko klasteriranje nije primjenjivo.");
+
+        if (k < 1 ||  k > n)
+            throw new IllegalArgumentException("NumOfClusters = " + k
+                    + " mora biti u [1, " + n + "] za hijerarhijsko klasteriranje.");
+
+        AgglomerativeClustering ac;
+        switch (appset.hierarchicalLinkage) {
+            case "Single":
+                ac = hamming ? AgglomerativeClustering.singleHamming() : AgglomerativeClustering.single();
+                break;
+            case "Complete":
+                ac = hamming ? AgglomerativeClustering.completeHamming() : AgglomerativeClustering.complete();
+                break;
+            case "Average":
+                ac = hamming ? AgglomerativeClustering.averageHamming() : AgglomerativeClustering.average();
+                break;
+            case "Ward":
+                if (hamming)
+                    throw new IllegalArgumentException("Wardova veza nema smisla uz Hammingovu udaljenost.");
+                ac = AgglomerativeClustering.ward();
+                break;
+            default:
+                throw new IllegalStateException("Nepoznat HierarchicalLinkage: " + appset.hierarchicalLinkage);
+        }
+
+        System.out.println(String.format(Locale.ROOT,
+                "Hierarchical initialization: linkage = %s, distance = %s, k = %d, n = %d",
+                appset.hierarchicalLinkage, appset.hierarchicalDistance, k, n));
+
+        Merge[] merges = ac.fit(X);
+        System.out.println(String.format(Locale.ROOT,
+                "Hijerarhijsko klasteriranje gotovo za %d spajanja.", merges.length));
+
+        // Pomoc pri odabiru k: merges[n - kk] je spajanje kojim bi kk klastera
+        // postalo kk - 1, pa je njegova visina "cijena" tog koraka. Velik skok
+        // izmedu visina za kk i kk + 1 sugerira da je kk prirodan broj klastera.
+        StringBuilder sb = new StringBuilder("Visine spajanja (kk -> kk-1):");
+        for (int kk = 2; kk <= Math.min(10, n); kk++)
+            sb.append(String.format(Locale.ROOT, " %d:%.3f", kk, merges[n - kk].height));
+        System.out.println(sb);
+
+        // Rez dendrograma na tocno k klastera, oznake su 0..k-1.
+        int[] labels = AgglomerativeClustering.cut(merges, k);
+        addClusterTargets(labels, k, appset);
+    }
 
     void initialClusteringGen(String outFolder, ApplicationSettings appset, int numChangedAttrs) {
         ArrayList<DataTuple> dataList = data.toArrayList();
