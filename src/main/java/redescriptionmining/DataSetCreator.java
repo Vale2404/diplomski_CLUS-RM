@@ -6,6 +6,9 @@
 package redescriptionmining;
 
 
+import clusteringevaluation.NoisePolicy;
+import clusteringevaluation.PointDistance;
+import clusteringevaluation.Silhouette;
 import clusteringhierarchical.AgglomerativeClustering;
 import clusteringhierarchical.Merge;
 import dbscan.Dbscan;
@@ -955,6 +958,24 @@ public class DataSetCreator {
                 + data.toArrayList().get(0).m_Doubles.length);
     }
 
+    private void printSilhouette(String algName, int[] labels, double[][] X,
+                                 boolean hamming, NoisePolicy policy) {
+        PointDistance d = hamming
+                ? (i, j) -> clusteringpartitional.Distance.HAMMING.dist(X[i], X[j])
+                : (i, j) -> clusteringpartitional.Distance.EUCLIDEAN.dist(X[i], X[j]);
+        String metric = hamming ? "Hamming" : "Euclidean";
+
+        try {
+            double s = Silhouette.mean(labels, d, policy);
+            System.out.println(String.format(Locale.ROOT,
+                    "%s silueta (%s, %s): %.4f",
+                    algName, metric, policy, s));
+        } catch (IllegalArgumentException e) {
+            System.out.println(algName + " silueta (" + metric + ", " + policy
+                    + ") nije definirana: " + e.getMessage());
+        }
+    }
+
     protected void initialClusteringKmeans(ApplicationSettings appset, Random r) {
         double[][] X = buildClusteringMatrix(appset);
         int k = appset.numOfClusters;
@@ -970,6 +991,7 @@ public class DataSetCreator {
         LloydClustering.Result result = kmeans.fit(X, new Random(42));
         int[] labels = result.labels();
         System.out.println("k-means rezultat: " + result);
+        printSilhouette("k-means", labels, X, false, NoisePolicy.IGNORE);
 
         addClusterTargets(labels, k, appset);
     }
@@ -1000,6 +1022,7 @@ public class DataSetCreator {
         LloydClustering.Result result = kmodes.fit(X, new Random(42));
         int[] labels = result.labels();
         System.out.println("k-modes rezultat: " + result);
+        printSilhouette("k-modes", labels, X, true, NoisePolicy.IGNORE);
 
         addClusterTargets(labels, k, appset);
     }
@@ -1034,6 +1057,10 @@ public class DataSetCreator {
         Dbscan db = new Dbscan(appset.dbscanEps, minPts);
         Dbscan.Result result = db.fit(X);
         System.out.println(result);
+        System.out.println(String.format(Locale.ROOT, "Udio suma: %.2f%%",
+                100.0 * result.numNoise / result.labels.length));
+        printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
+        printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
 
         addClusterTargets(result.labels, result.numClusters, appset);
     }
@@ -1090,6 +1117,8 @@ public class DataSetCreator {
 
         // Rez dendrograma na tocno k klastera, oznake su 0..k-1.
         int[] labels = AgglomerativeClustering.cut(merges, k);
+        printSilhouette("Hierarchical (" + appset.hierarchicalLinkage + ")",
+                labels, X, hamming, NoisePolicy.IGNORE);
         addClusterTargets(labels, k, appset);
     }
 
