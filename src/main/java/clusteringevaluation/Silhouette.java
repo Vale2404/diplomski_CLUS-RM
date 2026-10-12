@@ -1,14 +1,9 @@
 package clusteringevaluation;
 
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 public final class Silhouette {
-
-    // Dogovorena oznaka suma. Sve ostale oznake moraju biti >= 0.
-    public static final int NOISE = -1;
 
     private Silhouette() {}
 
@@ -18,7 +13,7 @@ public final class Silhouette {
     // Vraca polje duljine labels.length. Za tocke iskljucene politikom policy, vrijednost
     // je Double.NaN.
     // Baca IllegalArgumentException ako je neka oznaka negativna, a nije
-    // NOISE, ako particija (nakon primjene politike) nema
+    // NOISE_LABEL, ako particija (nakon primjene politike) nema
     // barem dva klastera, ili ako udaljenost vrati negativnu, NaN ili
     // beskonacnu vrijednost.
     public static double[] perPoint(int[] labels, PointDistance distance, NoisePolicy policy) {
@@ -40,7 +35,7 @@ public final class Silhouette {
 
         for (int i = 0; i < n; i++) {
             int ci = p.cluster[i];
-            if (ci == NOISE) {
+            if (ci == NoisePolicy.NOISE_LABEL) {
                 s[i] = Double.NaN;
                 continue;
             }
@@ -53,7 +48,7 @@ public final class Silhouette {
             Arrays.fill(sums, 0.0);
             for (int j = 0; j < n; j++) {
                 int cj = p.cluster[j];
-                if (j == i || cj == NOISE) {
+                if (j == i || cj == NoisePolicy.NOISE_LABEL) {
                     continue;
                 }
                 sums[cj] += checkedDistance(distance, i, j);
@@ -110,72 +105,5 @@ public final class Silhouette {
                     "incorrect distance between points " + i + " and " + j + ": " + v);
         }
         return v;
-    }
-
-    // Particija s oznakama preslikanima u 0..k-1.
-    // Zasto normalizacija: algoritmi daju oznake na razlicite nacine
-    // (hijerarhijsko npr. ID-jeve cvorova, k-modes nakon praznog klastera
-    // oznake s "rupama"). Silueta interno treba gusta polja indeksirana
-    // klasterom, a ovako adapteri ne moraju o tome brinuti. Usput nestaju i
-    // prazni klasteri: dobivaju indeks samo oznake koje se stvarno pojavljuju.
-    private static final class Partition {
-
-        // Normalizirana oznaka za svaku tocku, ili NOISE ako se tocka ignorira.
-        final int[] cluster;
-
-        // Broj tocaka u svakom klasteru, svaki je >= 1.
-        final int[] size;
-
-        // Broj klastera nakon normalizacije i primjene politike suma.
-        final int k;
-
-        private Partition(int[] cluster, int[] size, int k) {
-            this.cluster = cluster;
-            this.size = size;
-            this.k = k;
-        }
-
-        static Partition of(int[] labels, NoisePolicy policy) {
-            int n = labels.length;
-            int[] cluster = new int[n];
-            Map<Integer, Integer> ids = new HashMap<Integer, Integer>();
-            int next = 0;
-
-            for (int i = 0; i < n; i++) {
-                int label = labels[i];
-
-                if (label == NOISE) {
-                    switch (policy) {
-                        case IGNORE:
-                            cluster[i] = NOISE;
-                            break;
-                        case SINGLETON:
-                            cluster[i] = next++;
-                            break;
-                        default:
-                            throw new IllegalStateException("Unknown policy: " + policy);
-                    }
-                } else if (label < 0) {
-                    throw new IllegalArgumentException(
-                            "labels must be >= 0 or NOISE = -1: " + label);
-                } else {
-                    Integer id = ids.get(label);
-                    if (id == null) {
-                        id = next++;
-                        ids.put(label, id);
-                    }
-                    cluster[i] = id;
-                }
-            }
-
-            int[] size = new int[next];
-            for (int c : cluster) {
-                if (c != NOISE) {
-                    size[c]++;
-                }
-            }
-
-            return new Partition(cluster, size, next);
-        }
     }
 }

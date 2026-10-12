@@ -9,6 +9,7 @@ package redescriptionmining;
 import clusteringevaluation.NoisePolicy;
 import clusteringevaluation.PointDistance;
 import clusteringevaluation.Silhouette;
+import clusteringevaluation.CalinskiHarabasz;
 import clusteringhierarchical.AgglomerativeClustering;
 import clusteringhierarchical.Merge;
 import dbscan.Dbscan;
@@ -976,6 +977,29 @@ public class DataSetCreator {
         }
     }
 
+    // Ispisuje CH indeks za particiju labels nad tockama X.
+    // CH za kategoricke podatke nema smisla.
+    // X je standardizirana matrica iz buildClusteringMatrix, pa vrijednosti nisu
+    // usporedive s CH-om izracunatim na sirovim podacima.
+    private void printCalinskiHarabasz(String algName, int[] labels, double[][] X,
+                                       boolean hamming, NoisePolicy policy) {
+        if (hamming) {
+            System.out.println(algName + " Calinski-Harabasz (" + policy
+                    + ") nije primjenjiv na kategoricke podatke.");
+            return;
+        }
+
+        try {
+            double ch = CalinskiHarabasz.index(X, labels, policy);
+            System.out.println(String.format(Locale.ROOT,
+                    "%s Calinski-Harabasz (Euclidean, %s): %.4f",
+                    algName, policy, ch));
+        } catch (IllegalArgumentException e) {
+            System.out.println(algName + " Calinski-Harabasz (" + policy
+                    + ") nije definiran: " + e.getMessage());
+        }
+    }
+
     protected void initialClusteringKmeans(ApplicationSettings appset, Random r) {
         double[][] X = buildClusteringMatrix(appset);
         int k = appset.numOfClusters;
@@ -992,6 +1016,7 @@ public class DataSetCreator {
         int[] labels = result.labels();
         System.out.println("k-means rezultat: " + result);
         printSilhouette("k-means", labels, X, false, NoisePolicy.IGNORE);
+        printCalinskiHarabasz("k-means", labels, X, false, NoisePolicy.IGNORE);
 
         addClusterTargets(labels, k, appset);
     }
@@ -1023,6 +1048,7 @@ public class DataSetCreator {
         int[] labels = result.labels();
         System.out.println("k-modes rezultat: " + result);
         printSilhouette("k-modes", labels, X, true, NoisePolicy.IGNORE);
+        printCalinskiHarabasz("k-modes", labels, X, true, NoisePolicy.IGNORE);
 
         addClusterTargets(labels, k, appset);
     }
@@ -1061,6 +1087,8 @@ public class DataSetCreator {
                 100.0 * result.numNoise / result.labels.length));
         printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
         printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
+        printCalinskiHarabasz("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
+        printCalinskiHarabasz("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
 
         addClusterTargets(result.labels, result.numClusters, appset);
     }
@@ -1118,6 +1146,8 @@ public class DataSetCreator {
         // Rez dendrograma na tocno k klastera, oznake su 0..k-1.
         int[] labels = AgglomerativeClustering.cut(merges, k);
         printSilhouette("Hierarchical (" + appset.hierarchicalLinkage + ")",
+                labels, X, hamming, NoisePolicy.IGNORE);
+        printCalinskiHarabasz("Hierarchical (" + appset.hierarchicalLinkage + ")",
                 labels, X, hamming, NoisePolicy.IGNORE);
         addClusterTargets(labels, k, appset);
     }

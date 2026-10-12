@@ -8,6 +8,11 @@ package clusteringevaluation;
 // svjesno, umjesto da se skriva u nekoj zadanoj vrijednosti.
 // Ako particija nema suma, obje politike daju identican rezultat.
 
+// Sto se tice CH-a:
+//IGNORE: tocke suma ne ulaze u SSW, SSB ni n.
+//SINGLETON: svaka tocka suma je jednoclani klaster. Doprinosi 0 u SSW, ali ulazi u SSB i povecava k i n.
+//Ovo je vazno jer SINGLETON djeluje razlicito na ta dva indeksa.
+
 public enum NoisePolicy {
 
     // Tocke suma potpuno se uklanjaju iz izracuna: za njih se ne racuna s(i)
@@ -23,5 +28,8 @@ public enum NoisePolicy {
     // susjedni klaster pri racunanju b(i).
     // Stroze prema algoritmima koji oznacavaju puno suma: svaka takva tocka
     // povlaci prosjek prema 0.
-    SINGLETON
+    SINGLETON;
+
+    // Dogovorena oznaka suma. Sve ostale oznake moraju biti >= 0.
+    public static final int NOISE_LABEL = -1;
 }
