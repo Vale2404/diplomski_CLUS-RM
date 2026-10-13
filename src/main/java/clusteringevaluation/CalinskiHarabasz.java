@@ -18,7 +18,8 @@ public final class CalinskiHarabasz {
     // Baca IllegalArgumentException ako su podaci ili oznake neispravni
     // (vidi Partition i Centroids), ako particija nakon primjene politike
     // nema barem dva klastera, ili ako broj tocaka n nije veci od k.
-    // Vraca +Infinity kad je SSW = 0 i SSB > 0, a baca iznimku kad je SSW = SSB = 0.
+    // Vraca +Infinity kad su unutar svakog klastera sve tocke identicne,
+    // a baca iznimku kad su sve tocke identicne.
     public static double index(double[][] data, int[] labels, NoisePolicy policy) {
         Objects.requireNonNull(data, "data cannot be null");
         Objects.requireNonNull(labels, "labels cannot be null");
@@ -34,21 +35,23 @@ public final class CalinskiHarabasz {
             throw new IllegalArgumentException("for computing Calinski-Harabasz index number of points must be > k, got "
                     + cent.n + " points and k = " + p.k);
 
-        double w = ssw(data, p, cent);
-        double b = ssb(p, cent);
+        // Obje odluke donosimo na sirovim podacima, a ne preko w i b: centroid
+        // m identicnih tocaka x ne mora biti tocno x (npr. (0.1+0.1+0.1)/3 != 0.1),
+        // pa w i b mogu ispasti reda 1e-33 umjesto tocno 0.
+        // Sve tocke identicne: SSW = SSB = 0 i CH nije definiran (0/0).
+        if (allPointsIdentical(data, p))
+            throw new IllegalArgumentException(
+                    "Calinski-Harabasz index is undefined: all points are identical (SSW = SSB = 0)");
 
-        // SSW = 0: u svakom klasteru sve su tocke identicne.
-        // Ako je SSB > 0, klasteri su savrseno kompaktni i razdvojeni, CH tezi u
+        // U svakom klasteru sve su tocke identicne, a klasteri se razlikuju:
+        // SSW = 0 i SSB > 0, klasteri su savrseno kompaktni i razdvojeni, CH tezi u
         // beskonacnost, pa vracamo +Infinity (sklearn ovdje vraca 1.0, sto bi
         // savrsene klastere ocijenilo losije od gotovo svake stvarne particije).
-        // Ako je i SSB = 0, sve su tocke identicne i CH nije definiran (0/0).
-        if (w == 0.0) {
-            if (b == 0.0) {
-                throw new IllegalArgumentException(
-                        "Calinski-Harabasz index is undefined: all points are identical (SSW = SSB = 0)");
-            }
+        if (everyClusterConstant(data, p))
             return Double.POSITIVE_INFINITY;
-        }
+
+        double w = ssw(data, p, cent);
+        double b = ssb(p, cent);
 
         return (b / (p.k - 1)) / (w / (cent.n - p.k));
     }
@@ -102,5 +105,42 @@ public final class CalinskiHarabasz {
             globalC[t] /= cent.n;
         }
         return globalC;
+    }
+
+    // Jesu li sve tocke koje sudjeluju identicne.
+    private static boolean allPointsIdentical(double[][] data, Partition p) {
+        double[] first = null;
+        for (int i = 0; i < data.length; i++) {
+            if (p.cluster[i] == NoisePolicy.NOISE_LABEL)
+                continue;
+            if (first == null) {
+                first = data[i];
+                continue;
+            }
+            for (int t = 0; t < first.length; t++) {
+                if (data[i][t] != first[t])
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    // Jesu li unutar svakog klastera sve tocke identicne.
+    private static boolean everyClusterConstant(double[][] data, Partition p) {
+        double[][] first = new double[p.k][];
+        for (int i = 0; i < data.length; i++) {
+            int c  = p.cluster[i];
+            if (c == NoisePolicy.NOISE_LABEL)
+                continue;
+            if (first[c] == null) {
+                first[c] = data[i];
+                continue;
+            }
+            for (int t = 0; t < first[c].length; t++) {
+                if (data[i][t] != first[c][t])
+                    return false;
+            }
+        }
+        return true;
     }
 }
