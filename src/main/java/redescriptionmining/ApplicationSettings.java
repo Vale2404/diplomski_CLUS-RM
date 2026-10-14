@@ -30,6 +30,8 @@ public class ApplicationSettings {
 
     public String kmeansInitMethod;  // default je forgy, ili kmeans++
     public String kmodesInitMethod; //  default je forgy, a moze biti i kmeans++ i cao
+    public String kprototypesInitMethod; //  default je forgy, a moze biti i kmeans++ i cao
+    public double kprototypesGamma;
     public int numOfClusters; // broj klastera
     public int viewForClustering; // 0 - klasteriram pogled V1, 1 - klasteriram pogled V2, -1 - oba
 
@@ -135,6 +137,8 @@ public class ApplicationSettings {
         initializationMethod = "default";
         kmeansInitMethod = "Forgy";
         kmodesInitMethod = "Forgy";
+        kprototypesInitMethod = "Forgy";
+        kprototypesGamma = 1.0;
         numInitTargets = 1;
         numOfClusters = 3;
         viewForClustering = -1;
@@ -349,7 +353,7 @@ public class ApplicationSettings {
                         minimizeRules = true;
                     else minimizeRules = false;
                 } else if (line.contains("legacy")) {
-                	boolean t = line.contains("legacy");
+                    boolean t = line.contains("legacy");
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
                     if (tmp[1].contentEquals("true"))
@@ -572,10 +576,11 @@ public class ApplicationSettings {
                     if (!initializationMethod.equalsIgnoreCase("default")
                             && !initializationMethod.equalsIgnoreCase("kmeans")
                             && !initializationMethod.equalsIgnoreCase("kmodes")
+                            && !initializationMethod.equalsIgnoreCase("kprototypes")
                             && !initializationMethod.equalsIgnoreCase("dbscan")
                             && !initializationMethod.equalsIgnoreCase("hierarchical"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
-                                + tmp[1] + "\". allowed: default, kmeans, kmodes, dbscan, hierarchical.");
+                                + tmp[1] + "\". allowed: default, kmeans, kmodes, kprototypes, dbscan, hierarchical.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -601,16 +606,34 @@ public class ApplicationSettings {
                     else
                         throw new IllegalArgumentException("Illegal arg. for KmeansInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++.");
                 } else if (line.contains("KmodesInitMethod")) {
-                        String tmp[] = line.split("=");
-                        tmp[1] = tmp[1].trim();
-                        if (tmp[1].equalsIgnoreCase("KMeans++") || tmp[1].equalsIgnoreCase("KMeansPlusPlus"))
-                            kmodesInitMethod = "Kmeans++";
-                        else if (tmp[1].equalsIgnoreCase("Forgy"))
-                            kmodesInitMethod = "Forgy";
-                        else if (tmp[1].equalsIgnoreCase("Cao"))
-                            kmodesInitMethod = "Cao";
-                        else
-                            throw new IllegalArgumentException("Illegal arg. for KmodesInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++, Cao.");
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("KMeans++") || tmp[1].equalsIgnoreCase("KMeansPlusPlus"))
+                        kmodesInitMethod = "Kmeans++";
+                    else if (tmp[1].equalsIgnoreCase("Forgy"))
+                        kmodesInitMethod = "Forgy";
+                    else if (tmp[1].equalsIgnoreCase("Cao"))
+                        kmodesInitMethod = "Cao";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for KmodesInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++, Cao.");
+                } else if (line.contains("KprototypesInitMethod")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("KMeans++") || tmp[1].equalsIgnoreCase("KMeansPlusPlus"))
+                        kprototypesInitMethod = "Kmeans++";
+                    else if (tmp[1].equalsIgnoreCase("Forgy"))
+                        kprototypesInitMethod = "Forgy";
+                    else if (tmp[1].equalsIgnoreCase("Cao"))
+                        kprototypesInitMethod = "Cao";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for KprototypesInitMethod: \"" + tmp[1] + "\". allowed: Forgy, KMeans++, Cao.");
+                } else if (line.contains("KprototypesGamma")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    kprototypesGamma = Double.parseDouble(tmp[1]);
+                    if (!Double.isFinite(kprototypesGamma) || kprototypesGamma < 0)
+                        throw new IllegalArgumentException("Illegal arg. for KprototypesGamma: \""
+                                + tmp[1] + "\". must be finite and >= 0.");
                 } else if (line.contains("DbscanEps")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();

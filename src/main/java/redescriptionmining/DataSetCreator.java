@@ -16,6 +16,7 @@ import clusteringhierarchical.Merge;
 import dbscan.Dbscan;
 import clusteringpartitional.Initializer;
 import clusteringpartitional.Initializers;
+import clusteringpartitional.Preprocessing;
 import clusteringpartitional.LloydClustering;
 import si.ijs.kt.clus.data.ClusSchema;
 import si.ijs.kt.clus.data.io.ARFFFile;
@@ -882,6 +883,102 @@ public class DataSetCreator {
         return X;
     }
 
+    // Rezultat buildMixedMatrix: matrica X i maska tipova stupaca.
+    // categorical[t] == true znaci da je stupac t kategoricki.
+    // X i maska se racunaju zajedno, na jednom mjestu, pa se ne mogu razici.
+    private static final class MixedMatrix {
+        final double[][] X;
+        final boolean[] categorical;
+
+        MixedMatrix(double[][] X, boolean[] categorical) {
+            this.X = X;
+            this.categorical = categorical;
+        }
+    }
+
+    private MixedMatrix buildMixedMatrix(ApplicationSettings appset) {
+        ArrayList<DataTuple> dataList = data.toArrayList();
+        int n = data.getNbRows();
+
+        int firstW2 = W2indexs.get(0) - 1;
+
+        ClusAttrType[] numericAttrs = schema.getNumericAttrUse(AttributeUseType.All);
+        ArrayList<ClusAttrType> num = new ArrayList<>();
+        for (ClusAttrType t : numericAttrs) {
+            boolean inW1 = t.getIndex() < firstW2;
+            if (appset.viewForClustering == -1
+                    || (appset.viewForClustering == 0 && inW1)
+                    || (appset.viewForClustering == 1 && !inW1)) {
+                num.add(t);
+            }
+        }
+
+        NominalAttrType[] nominalAttrs = schema.getNominalAttrUse(AttributeUseType.All);
+        ArrayList<NominalAttrType> cat = new ArrayList<>();
+        for (NominalAttrType t : nominalAttrs) {
+            boolean inW1 = t.getIndex() < firstW2;
+            if (appset.viewForClustering == -1
+                    || (appset.viewForClustering == 0 && inW1)
+                    || (appset.viewForClustering == 1 && !inW1)) {
+                cat.add(t);
+            }
+        }
+
+        int p = num.size();
+        int q = cat.size();
+        int d = p + q;
+        System.out.println("view = " + appset.viewForClustering
+                + ", numeric attrs = " + p + ", nominal attrs = " + q);
+
+        if (d == 0)
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
+                    + "numerickih ni nominalnih atributa, k-prototypes nije primjenjiv.");
+
+        // Prepisivanje u matricu. Nedostajuce vrijednosti odbijamo s porukom
+        // koja kaze o kojem se atributu radi.
+        double[][] X = new double[n][d];
+        for (int i = 0; i < n; i++) {
+            DataTuple tuple = dataList.get(i);
+            double[] row = tuple.m_Doubles;
+
+            // Numericki dio. CLUS nedostajucu numericku vrijednost sprema kao
+            // NumericAttrType.MISSING (+beskonacno), pa bi je standardizacija
+            // odbila samo s opcom porukom "is not finite".
+            for (int f = 0; f < p; f++) {
+                ClusAttrType t = num.get(f);
+                double v = row[t.getArrayIndex()];
+                if (v == NumericAttrType.MISSING)
+                    throw new IllegalStateException("Nedostajuca vrijednost u retku " + i
+                            + ", atribut " + t.getName()
+                            + ". k-prototypes zasad ne podrzava nedostajuce vrijednosti.");
+                X[i][f] = v;
+            }
+
+            // Kategoricki dio. CLUS nedostajucu nominalnu vrijednost kodira
+            // brojem >= getNbValues(), pa bi je k-prototypes tiho shvatio kao
+            // jos jednu kategoriju.
+            for (int f = 0; f < q; f++) {
+                NominalAttrType t = cat.get(f);
+                if (t.isMissing(tuple))
+                    throw new IllegalStateException("Nedostajuca vrijednost u retku " + i
+                            + ", atribut " + t.getName()
+                            + ". k-prototypes zasad ne podrzava nedostajuce vrijednosti.");
+                X[i][p + f] = t.getNominal(tuple);
+            }
+        }
+
+        // Maska: prvih p stupaca numericki, zadnjih q kategoricki.
+        boolean[] categorical = new boolean[d];
+        Arrays.fill(categorical, p, d, true);
+
+        // Standardizacija numerickih stupaca. Ista aritmetika kao u
+        // buildClusteringMatrix, a kategoricke stupce samo prepisuje
+        // (i usput provjerava da su ispravni kodovi).
+        X = Preprocessing.standardize(X, categorical);
+
+        return new MixedMatrix(X, categorical);
+    }
+
 
     // Dodaje rezultat klasteriranja u CLUS podatke kao k novih ciljnih
     // atributa target1..targetk.
@@ -1073,6 +1170,42 @@ public class DataSetCreator {
 
         addClusterTargets(labels, k, appset);
     }
+
+
+    protected void initialClusteringKprototypes(ApplicationSettings appset, Random r) {
+        MixedMatrix mm = buildMixedMatrix(appset);
+        int k = appset.numOfClusters;
+
+        Initializer kprototypesInit;
+        switch (appset.kprototypesInitMethod) {
+            case "Forgy":
+                kprototypesInit = new Initializers.Forgy();
+                break;
+            case "Kmeans++":
+                kprototypesInit = new Initializers.KmeansPlusPlus();
+                break;
+            case "Cao":
+                kprototypesInit = new Initializers.Cao(mm.categorical);
+                break;
+            default:
+                throw new IllegalStateException("Nepoznat KprototypesInitMethod: " + appset.kprototypesInitMethod);
+        }
+
+        System.out.println("k-prototypes initialization: k = " + k
+                + ", initializer: " + kprototypesInit.name()
+                + ", gamma = " + appset.kprototypesGamma);
+
+        LloydClustering kprototypes = LloydClustering.kPrototypes(k, kprototypesInit, mm.categorical, appset.kprototypesGamma);
+        LloydClustering.Result result = kprototypes.fit(mm.X, new Random(42));
+        int[] labels = result.labels();
+        System.out.println("k-prototypes rezultat: " + result);
+        //printSilhouette("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
+        //printCalinskiHarabasz("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
+        //printDaviesBouldin("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
+
+        addClusterTargets(labels, k, appset);
+    }
+
 
     protected void initialClusteringDbscan(ApplicationSettings appset) {
         double[][] X = buildClusteringMatrix(appset);
