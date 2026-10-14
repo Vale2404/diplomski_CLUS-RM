@@ -147,4 +147,114 @@ public final class CenterUpdaters {
             System.arraycopy(newC, 0, C, 0, k);
         }
     }
+
+
+    // k-prototypes azuriranje za mijesane podatke. Centroid se racuna
+    // stupac po stupac: za numericki stupac uzimamo aritmeticku sredinu
+    // tocaka klastera (kao Mean), a za kategoricki stupac najcescu
+    // vrijednost (kao Mode). To je ispravno jer se funkcija cilja rastavlja
+    // na clanove od kojih svaki ovisi o jednoj komponenti centroida,
+    // pa svaku komponentu mozemo optimizirati zasebno.
+    // categorical[t] == true znaci da je stupac t kategoricki.
+    // Kao i Mode, klasa ima stanje (domain), pa jednu instancu ne treba
+    // dijeliti izmedu paralelnih fit-ova.
+    public static final class Prototype implements CenterUpdater {
+
+        // Maska tipova stupaca. Kopija, pa promjena maske kod pozivatelja
+        // ne utjece na updater
+        private final boolean[] categorical;
+
+        // Indeksi numerickih i kategorickih stupaca, racunaju se jednom.
+        private final int[] num;
+        private final int[] cat;
+
+        // Velicina domene svakog stupca, racuna se u prepare.
+        // Za numericke stupce je 0 i ne koristi se.
+        private int[] domain;
+
+        public Prototype(boolean[] categorical) {
+            if (categorical == null)
+                throw new IllegalArgumentException("categorical cannot be null");
+            this.categorical = categorical.clone();
+            this.num = Categorical.indicesOf(this.categorical, false);
+            this.cat = Categorical.indicesOf(this.categorical, true);
+        }
+
+
+        // Provjerava da maska ima duljinu d i da su kategoricki stupci
+        // ispravni kodovi, te racuna njihove domene. Poziva se u fit-u prije
+        // inicijalizatora, pa je duljina maske provjerena prije prvog
+        // poziva udaljenosti.
+        @Override
+        public void prepare(double[][] X) {
+            domain = Categorical.domains(X, categorical);
+        }
+
+        @Override
+        public void update(double[][] X, double[][] C, int[] labels) {
+
+            int n =  X.length;
+            int d = X[0].length;
+            int k = C.length;
+
+            if (domain == null || domain.length != d)
+                throw new IllegalStateException("prepare(X) must be called before update");
+
+            // counts[j] = broj tocaka u klasteru j. Treba za provjeru
+            // praznih klastera i za racunanje sredine.
+            int[] counts = new int[k];
+            for (int i = 0; i < n; i++)
+                counts[labels[i]]++;
+
+            // fit prije poziva popravlja prazne klastere,
+            // pa ovdje prazan klaster znaci gresku.
+            for (int j = 0; j < k; j++) {
+                if (counts[j] == 0)
+                    throw new IllegalStateException("empty cluster " + j);
+            }
+
+            // Novi centroidi. Svaki stupac je ili u num ili u cat,
+            // pa ce svaka komponenta biti postavljena.
+            double[][] newC = new double[k][d];
+
+            // Numericki dio, isto kao Mean.
+            // sums[j][s] = zbroj vrijednosti stupca num[s] po tockama
+            // klastera j. Zbrajamo redom po i, pa dijelimo s counts, tocno
+            // kao Mean, da uz masku bez kategorickih stupaca rezultat bude
+            // bit po bit jednak k-meansu.
+            double[][] sums = new double[k][num.length];
+            for (int i = 0; i < n; i++) {
+                double[] s = sums[labels[i]];
+                for (int p = 0; p < num.length; p++)
+                    s[p] += X[i][num[p]];
+            }
+            for (int j = 0; j < k; j++)
+                for (int p = 0; p < num.length; p++)
+                    newC[j][num[p]] = sums[j][p] / counts[j];
+
+
+            // Kategoricki dio, isto kao Mode.
+            // Za svaki kategoricki stupac t tablica frekvencija
+            // freq[j][v] = broj tocaka klastera j cija je vrijednost
+            // stupca t jednaka v.
+            for (int t : cat) {
+                int[][] freq = new int[k][domain[t]];
+                for (int i = 0; i < n; i++)
+                    freq[labels[i]][(int) X[i][t]]++;
+
+                // Najcesca vrijednost u svakom klasteru. Strogi > znaci da kod
+                // izjednacenja ostaje manji kod, kao u Mode, pa je rezultat
+                // deterministicki i uz masku sa svim true jednak k-modesu.
+                for (int j = 0; j < k; j++) {
+                    int best = 0;
+                    for (int v = 1; v < domain[t]; v++) {
+                        if (freq[j][v] > freq[j][best])
+                            best = v;
+                    }
+                    newC[j][t] = best;
+                }
+            }
+            System.arraycopy(newC, 0, C, 0, k);
+        }
+    }
 }

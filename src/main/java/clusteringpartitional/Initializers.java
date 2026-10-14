@@ -95,23 +95,27 @@ public final class Initializers {
                 // "tezina" svih tocaka, treba nam kao normalizacijska
                 // konstanta za vjerojatnost. Tocka i biti ce odabrana kao novi
                 // centroid s vjerojatnoscu minDist[i] / sum.
-                // Sigurno je sum > 0 jer je odabrano j < k centroida, a razlicitih
+                // Uz metriku (SQ_EUCLIDEAN, HAMMING) sigurno je sum > 0 jer je
+                // odabrano j < k centroida, a razlicitih
                 // tocaka ima barem k, zato postoji tocka koja nije jednaka niti
                 // jednom centroidu, pa je njen minDist strogo pozitivan.
                 double sum = 0.0;
                 for (int i = 0; i < n; i++)
                     sum += minDist[i];
 
-                // Zbog requireDistinctRows ovo se ne moze dogoditi, pa
-                // ako se dogodi, negdje je greska.
+                // Mijesana udaljenost uz gamma = 0 nije metrika: dvije tocke koje
+                // se razlikuju samo u kategorickim stupcima imaju udaljenost 0.
+                // Tada sve preostale tocke mogu biti na udaljenosti 0 od nekog
+                // centra, pa nema tocke koju bismo mogli izvuci.
                 if (sum <= 0.0)
-                    throw new IllegalStateException("all points coincide with chosen centers");
+                    throw new IllegalStateException("all points are at distance 0 from chosen centers after choosing "
+                            + j + " centers (with k-prototypes this can happen when gamma = 0)");
 
                 // Tocka s vecim minDist (dalje od svih do sad odabranih
                 // centroida) ima vecu sansu da bude odabrana kao sljedeci.
                 // Ovo funkcionira kao kotac ruleta:
                 // Zamisli interval [0, sum> podijeljen na n uzastopnih komada, gdje
-                // komad točke i ima duljinu minDist[i]:
+                // komad tocke i ima duljinu minDist[i]:
                 // |--0--|-1-|------------2------------|--3--| ... |
                 // 0                                              sum
                 // r je nasumican broj u tom intervalu. Petlja zbraja duljine komada (cum)
@@ -154,7 +158,7 @@ public final class Initializers {
     }
 
 
-    // Caova inicijalizacija za kategoricke podatke.
+    // Caova inicijalizacija za kategoricke i mijesane podatke.
     // Dobar pocetni centar mora biti tipican (lezati u "srcu" neke grupe)
     // i daleko od vec odabranih centara. Tipicnost mjerimo gustocom:
     // koliko cesto se vrijednosti atributa tocke pojavljuju u cijelom skupu.
@@ -162,8 +166,40 @@ public final class Initializers {
     // najvecim umnoskom gustoce i udaljenosti do najblizeg vec odabranog
     // centra. Sama udaljenost bi birala outliere, a sama gustoca bi sve
     // centre stavila u najveci klaster, pa umnozak balansira ta dva zahtjeva.
+    // Za mijesane podatke (prosirenje izvorne metode) gustocu racunamo samo po
+    // kategorickim stupcima, jer je frekvencija vrijednosti definirana samo za
+    // njih, a udaljenost je ona koju koristi algoritam (kod k-prototypesa
+    // mijesana udaljenost), pa numericki dio utjece na to koliko je tocka
+    // daleko od centara. Bez maske su svi stupci kategoricki i metoda je
+    // tocno izvorni Cao.
     // Metoda je deterministicka, za iste podatke uvijek daje iste centre.
     public static final class Cao implements Initializer {
+        // categorical[t] == true znaci da je stupac t kategoricki.
+        // null znaci da su svi stupci kategoricki (izvorni Cao).
+        private final boolean[] categorical;
+
+        // Izvorni Cao za cisto kategoricke podatke.
+        public Cao() {
+            this.categorical = null;
+        }
+
+        // Cao za mijesane podatke. Maska mora biti ista kao ona
+        // predana kPrototypes, a kopira se, pa kasnija promjena
+        // kod pozivatelja ne utjece na inicijalizator.
+        // Bez ijednog kategorickog stupca sve gustoce bi bile 0,
+        // pa nijedna tocka ne bi mogla biti odabrana. Zato to
+        // odbijamo odmah, a ne tek u initialCentroids.
+        public Cao(boolean[] categorical) {
+            if (categorical == null)
+                throw new IllegalArgumentException("categorical cannot be null");
+            boolean anyCat = false;
+            for (boolean c : categorical)
+                anyCat |= c;
+            if (!anyCat)
+                throw new IllegalArgumentException("Cao requires at least one categorical column");
+            this.categorical = categorical.clone();
+        }
+
         @Override
         public double[][] initialCentroids(double[][] X, int k, Distance distance, Random rnd) {
             // rnd se ne koristi jer metoda nema slucajnosti,
@@ -176,41 +212,48 @@ public final class Initializers {
             int d = X[0].length;
 
             // Jamci da postoji barem k razlicitih tocaka. Bez toga ne
-            // mozemo dobiti k razlicitih centara, a u koraku biranja
-            // ne bi uvijek postojala tocka s pozitivnim scoreom.
+            // mozemo dobiti k razlicitih centara.
             requireDistinctRows(X, k);
 
+            // Maska koju koristimo: zadana, ili "sve kategoricko".
+            boolean[] mask = categorical;
+            if (mask == null) {
+                mask = new boolean[d];
+                Arrays.fill(mask, true);
+            }
+
             // Korak 2: gustoca
-            // Velicina domene svakog atributa (najveci kod + 1). Ujedno
-            // provjerava da su sve vrijednosti ispravni kodovi kategorija,
-            // pa Cao odmah odbija npr. realne brojeve, s kojima ne zna raditi.
-            int[] domain = Categorical.domains(X);
+            // Velicina domene svakog stupca. Za kategoricke stupce ujedno
+            // provjerava da su vrijednosti ispravni kodovi, a provjerava i da
+            // maska ima duljinu d. Numericki stupci imaju domain 0.
+            int[] domain = Categorical.domains(X, mask);
+
+            // Indeksi kategorickih stupaca. Samo oni ulaze u gustocu.
+            int[] cat = Categorical.indicesOf(mask, true);
 
             // Tablica frekvencija za cijeli skup podataka:
-            // freq[t][v] = broj tocaka cija je vrijednost atributa t jednaka v.
-            // Za razliku od Mode.update ovdje nema klastera, jer gustoca
-            // gleda koliko je tocka tipicna za sve podatke.
-            // Retci su razlicite duljine (nazubljeni niz), jer svaki atribut
-            // ima svoj broj kategorija.
+            // freq[t][v] = broj tocaka cija je vrijednost stupca t jednaka v.
+            // Retci za numericke stupce ostaju null i nikad se ne koriste.
             int[][] freq = new int[d][];
-            for (int t = 0; t < d; t++)
+            for (int t : cat)
                 freq[t] = new int[domain[t]];
 
-            // Jedan prolaz kroz podatke: za svaku tocku i svaki atribut
-            // povecamo brojac vrijednosti koju ta tocka ima u tom atributu.
+            // Jedan prolaz kroz podatke: za svaku tocku i svaki kategoricki
+            // stupac povecamo brojac vrijednosti koju ta tocka ima u tom stupcu.
             for (int i = 0; i < n; i++)
-                for (int t = 0; t < d; t++)
+                for (int t : cat)
                     freq[t][(int) X[i][t]]++;
 
-            // Gustoca tocke: zbroj frekvencija njezinih vrijednosti po svim
-            // atributima. Tocka cije su vrijednosti ceste ima veliku gustocu,
-            // a tocka s rijetkim vrijednostima (sum, outlier) malu.
-            // Prava gustoca iz rada je dens[i] / (n * d), ali dijeljenje
-            // istom konstantom ne mijenja koja tocka ima najveci score, pa
-            // ga preskacemo i ostajemo u cijelim brojevima.
+            // Gustoca tocke: zbroj frekvencija njezinih vrijednosti po
+            // kategorickim stupcima. Prava gustoca iz rada je
+            // dens[i] / (n * broj kategorickih stupaca), ali dijeljenje istom
+            // konstantom ne mijenja koja tocka ima najveci score, pa ga
+            // preskacemo i ostajemo u cijelim brojevima.
+            // Svaka tocka ima dens >= broj kategorickih stupaca >= 1, jer
+            // njezina vlastita vrijednost ulazi u frekvenciju.
             int[] dens = new int[n];
             for (int i = 0; i < n; i++)
-                for (int t = 0; t < d; t++)
+                for (int t : cat)
                     dens[i] += freq[t][(int) X[i][t]];
 
             // korak 3: biranje centroida
@@ -228,8 +271,7 @@ public final class Initializers {
             C[0] = X[first].clone();
 
             // minDist[i] je udaljenost tocke i do najblizeg dosad odabranog
-            // centroida. Isto kao kod Kmeans++, dok imamo samo jedan centroid,
-            // to je udaljenost bas do njega.
+            // centroida, mjerena udaljenoscu koju koristi algoritam.
             double[] minDist = new double[n];
             for (int i = 0; i < n; i++)
                 minDist[i] = distance.dist(X[i], C[0]);
@@ -243,7 +285,8 @@ public final class Initializers {
                 // i daleko od postojecih centroida.
                 // bestScore krece od 0, a uvjet je strogi >, pa tocka sa
                 // scoreom 0 nikad ne moze biti odabrana. To su upravo vec
-                // odabrani centroidi i njihovi duplikati, jer im je minDist 0.
+                // odabrani centroidi i njihovi duplikati (uz mijesanu udaljenost
+                // to su sve tocke na udaljenosti 0 od nekog centra), jer im je minDist 0.
                 // Strogi > ujedno znaci da kod izjednacenja ostaje manji indeks.
                 int best = -1;
                 double bestScore = 0.0;
@@ -255,11 +298,16 @@ public final class Initializers {
                     }
                 }
 
-                // Zbog requireDistinctRows uvijek postoji tocka razlicita od
-                // svih dosad odabranih centroida, a ona ima minDist > 0 i
-                // dens > 0, pa i score > 0. Ako se ovo dogodi, negdje je greska.
+                // Uz metriku (npr. Hamming) zbog requireDistinctRows uvijek
+                // postoji tocka s minDist > 0, pa i scoreom > 0. Mijesana
+                // udaljenost uz gamma = 0 nije metrika: dvije tocke koje se
+                // razlikuju samo u kategorickim stupcima imaju udaljenost 0.
+                // Tada se moze dogoditi da su sve preostale tocke na udaljenosti
+                // 0 od nekog centra, pa ne mozemo odabrati k centara.
                 if (best == -1)
-                    throw new IllegalStateException("all points coincide with chosen centers");
+                    throw new IllegalStateException("no point has positive score after choosing "
+                            + j + " centers (all remaining points are at distance 0 from a chosen center; "
+                            + "with k-prototypes this can happen when gamma = 0)");
 
                 // Odabrana tocka postaje novi centroid.
                 C[j] = X[best].clone();

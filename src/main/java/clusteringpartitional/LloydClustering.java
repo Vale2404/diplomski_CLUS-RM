@@ -37,6 +37,12 @@ public class LloydClustering {
         return new LloydClustering(k, 300, Distance.HAMMING, initializer, new CenterUpdaters.Mode());
     }
 
+    public static LloydClustering kPrototypes(int k, Initializer initializer,
+                                              boolean[] categorical, double gamma) {
+        return new LloydClustering(k, 300, Distance.mixed(categorical, gamma),
+                initializer, new CenterUpdaters.Prototype(categorical));
+    }
+
     // Glavna metoda klase, ona pokrece algoritam i vraca
     // objekt Result u kojem je sve sto je izracunala.
     // Metoda prima matricu X dimenzija n*d (n tocaka, svaka
