@@ -13,7 +13,7 @@ import clusteringevaluation.CalinskiHarabasz;
 import clusteringevaluation.DaviesBouldin;
 import clusteringhierarchical.AgglomerativeClustering;
 import clusteringhierarchical.Merge;
-import dbscan.Dbscan;
+import clusteringdensity.Dbscan;
 import clusteringpartitional.Initializer;
 import clusteringpartitional.Initializers;
 import clusteringpartitional.Preprocessing;
@@ -1218,7 +1218,7 @@ public class DataSetCreator {
         // q-kvantilu jezgreno je priblizno q udio tocaka.
         // Locale.ROOT za ispis koristi decimalnu tocku (moze se izravno
         // kopirati u .set datoteku).
-        double[] kDist = Dbscan.kDistances(X, minPts, dbscan.Distance.EUCLIDEAN);
+        double[] kDist = Dbscan.kDistances(X, minPts, clusteringdensity.Distance.EUCLIDEAN);
         Arrays.sort(kDist);
         StringBuilder sb = new StringBuilder("k-distance kvantili (minPts = " + minPts + "):");
         for (double q : new double[]{0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99}) {
