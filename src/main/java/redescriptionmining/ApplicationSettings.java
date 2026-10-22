@@ -40,6 +40,8 @@ public class ApplicationSettings {
 
     public double dbscanEps; // polumjer okoline za DBSCAN, mora se zadati za InitializationMethod = dbscan
     public int dbscanMinPts; // minPts za DBSCAN; <= 0 znaci heuristiku 2*d
+    public String dbscanDistance; // Euclidean, Hamming ili Mixed
+    public double dbscanGamma;    // gamma za DbscanDistance = Mixed
 
 
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
@@ -146,6 +148,8 @@ public class ApplicationSettings {
         hierarchicalDistance = "Euclidean";
         dbscanEps = -1;
         dbscanMinPts = -1;
+        dbscanDistance = "Euclidean";
+        dbscanGamma = 1.0;
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -646,6 +650,22 @@ public class ApplicationSettings {
                     dbscanMinPts = Integer.parseInt(tmp[1]);
                     if (dbscanMinPts <= 0)
                         throw new IllegalArgumentException("Illegal arg. for DbscanMinPts: \"" + tmp[1] + "\". must be > 0.");
+                } else if (line.contains("DbscanDistance")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("euclidean")) dbscanDistance = "Euclidean";
+                    else if (tmp[1].equalsIgnoreCase("hamming")) dbscanDistance = "Hamming";
+                    else if (tmp[1].equalsIgnoreCase("mixed")) dbscanDistance = "Mixed";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for DbscanDistance: \"" + tmp[1] + "\"." +
+                                "allowed: Euclidean, Hamming, Mixed.");
+                } else if (line.contains("DbscanGamma")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    dbscanGamma = Double.parseDouble(tmp[1]);
+                    if (!Double.isFinite(dbscanGamma) || dbscanGamma < 0)
+                        throw new IllegalArgumentException("Illegal arg. for DbscanGamma: \""
+                                + tmp[1] + "\". must be finite and >= 0.");
                 } else if (line.contains("HierarchicalLinkage")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();

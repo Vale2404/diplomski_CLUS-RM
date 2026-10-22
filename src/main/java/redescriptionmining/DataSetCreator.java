@@ -856,7 +856,8 @@ public class DataSetCreator {
         System.out.println("view = " + appset.viewForClustering + ", number of used nominal attrs = " + d);
 
         if (d == 0)
-            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema " + "nominalnih atributa, k-modes nije primjenjiv.");
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
+                    + "nominalnih atributa, kategoricko klasteriranje nije primjenjivo.");
 
         StringBuilder sb = new StringBuilder("Nominalni atributi (ime:broj vrijednosti):");
         for (NominalAttrType t : attrs)
@@ -876,7 +877,7 @@ public class DataSetCreator {
                 if (t.isMissing(tuple))
                     throw new IllegalStateException("Nedostajuca vrijednost u retku " + i
                             + ", atribut " + t.getName()
-                            + ". k-modes zasad ne podrzava nedostajuce vrijednosti.");
+                            + ". kategoricko klasteriranje zasad ne podrzava nedostajuce vrijednosti.");
                 X[i][f] = t.getNominal(tuple);
             }
         }
@@ -1208,19 +1209,48 @@ public class DataSetCreator {
 
 
     protected void initialClusteringDbscan(ApplicationSettings appset) {
-        double[][] X = buildClusteringMatrix(appset);
+        // Matrica i udaljenost ovise o DbscanDistance. Udaljenost nam ovdje
+        // treba samo za k-distance kvantile, a sam DBSCAN dobivamo iz
+        // tvornice (ispod), koja uz udaljenost provjerava i podatke.
+        double[][] X;
+        boolean[] categorical = null; // maska, samo za Mixed
+        clusteringdensity.Distance distance;
+        switch (appset.dbscanDistance) {
+            case "Euclidean":
+                X = buildClusteringMatrix(appset);
+                distance = clusteringdensity.Distance.EUCLIDEAN;
+                break;
+            case "Hamming":
+                X = buildCategoricalMatrix(appset);
+                distance = clusteringdensity.Distance.HAMMING;
+                break;
+            case "Mixed":
+                MixedMatrix mm = buildMixedMatrix(appset);
+                X = mm.X;
+                categorical = mm.categorical;
+                distance = clusteringdensity.Distance.mixed(categorical, appset.dbscanGamma);
+                break;
+            default:
+                throw new IllegalStateException("Nepoznat DbscanDistance: " + appset.dbscanDistance);
+        }
+
         int d = X[0].length;
+        if (d == 0)
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
+                    + "atributa za DbscanDistance = " + appset.dbscanDistance + ".");
 
         // ako minPts nije zadan, koristimo uobicajenu heuristiku 2*d
         int minPts = appset.dbscanMinPts > 0 ? appset.dbscanMinPts : 2 * d;
 
         // k-distance kvantili kao pomoc pri odabiru eps-a: za eps jednak
         // q-kvantilu jezgreno je priblizno q udio tocaka.
-        // Locale.ROOT za ispis koristi decimalnu tocku (moze se izravno
-        // kopirati u .set datoteku).
-        double[] kDist = Dbscan.kDistances(X, minPts, clusteringdensity.Distance.EUCLIDEAN);
+        // Vrijednosti su na
+        // skali odabrane udaljenosti: kod Hamminga broj razlicitih atributa,
+        // a kod Mixed kvadrat euklidske + gamma * broj kategorickih razlika.
+        double[] kDist = Dbscan.kDistances(X, minPts, distance);
         Arrays.sort(kDist);
-        StringBuilder sb = new StringBuilder("k-distance kvantili (minPts = " + minPts + "):");
+        StringBuilder sb = new StringBuilder("k-distance kvantili (" + appset.dbscanDistance
+                + ", minPts = " + minPts + "):");
         for (double q : new double[]{0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99}) {
             int idx = (int) Math.floor(q * (kDist.length - 1));
             sb.append(String.format(Locale.ROOT, " %d%%=%.3f", Math.round(q * 100), kDist[idx]));
@@ -1231,20 +1261,41 @@ public class DataSetCreator {
             throw new IllegalArgumentException("Za InitializationMethod = dbscan zadaj DbscanEps > 0 "
                     + "(pomoc: k-distance kvantili ispisani iznad).");
 
-        System.out.println("DBSCAN initialization: eps = " + appset.dbscanEps
-                + ", minPts = " + minPts + (appset.dbscanMinPts > 0 ? "" : " (heuristika 2*d)"));
+        System.out.println("DBSCAN initialization: distance = " + appset.dbscanDistance
+                + ", eps = " + appset.dbscanEps
+                + ", minPts = " + minPts + (appset.dbscanMinPts > 0 ? "" : " (heuristika 2*d)")
+                + ("Mixed".equals(appset.dbscanDistance) ? ", gamma = " + appset.dbscanGamma : ""));
 
-        Dbscan db = new Dbscan(appset.dbscanEps, minPts);
+        Dbscan db;
+        switch (appset.dbscanDistance) {
+            case "Euclidean":
+                db = Dbscan.numeric(appset.dbscanEps, minPts);
+                break;
+            case "Hamming":
+                db = Dbscan.categorical(appset.dbscanEps, minPts);
+                break;
+            default: // Mixed, ostale vrijednosti odbijene su gore
+                db = Dbscan.mixed(appset.dbscanEps, minPts, categorical, appset.dbscanGamma);
+                break;
+        }
+
         Dbscan.Result result = db.fit(X);
         System.out.println(result);
         System.out.println(String.format(Locale.ROOT, "Udio suma: %.2f%%",
                 100.0 * result.numNoise / result.labels.length));
-        printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
-        printSilhouette("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
-        printCalinskiHarabasz("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
-        printCalinskiHarabasz("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
-        printDaviesBouldin("DBSCAN", result.labels, X, false, NoisePolicy.IGNORE);
-        printDaviesBouldin("DBSCAN", result.labels, X, false, NoisePolicy.SINGLETON);
+
+        // Indeksi kvalitete: za Euclidean kao do sada, za Hamming silueta s
+        // Hammingovom udaljenoscu (CH i DB ispisu da nisu primjenjivi), a za
+        // Mixed ih zasad preskacemo, kao i kod k-prototypesa.
+        if (!"Mixed".equals(appset.dbscanDistance)) {
+            boolean hamming = "Hamming".equals(appset.dbscanDistance);
+            printSilhouette("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
+            printSilhouette("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
+            printCalinskiHarabasz("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
+            printCalinskiHarabasz("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
+            printDaviesBouldin("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
+            printDaviesBouldin("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
+        }
 
         addClusterTargets(result.labels, result.numClusters, appset);
     }
