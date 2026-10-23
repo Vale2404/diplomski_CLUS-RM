@@ -14,6 +14,8 @@ import clusteringevaluation.DaviesBouldin;
 import clusteringhierarchical.AgglomerativeClustering;
 import clusteringhierarchical.Merge;
 import clusteringdensity.Dbscan;
+import clusteringdensity.Densityclustering;
+import clusteringdensity.Hdbscan;
 import clusteringpartitional.Initializer;
 import clusteringpartitional.Initializers;
 import clusteringpartitional.Preprocessing;
@@ -980,6 +982,30 @@ public class DataSetCreator {
         return new MixedMatrix(X, categorical);
     }
 
+    // Matrica za klasteriranje gustocom (DBSCAN, HDBSCAN), ovisno o
+    // odabranoj udaljenosti. Za Euclidean i Hamming maska categorical je
+    // null, a za Mixed oznacava kategoricke stupce.
+    private MixedMatrix buildDensityMatrix(String distanceName, ApplicationSettings appset) {
+        MixedMatrix mm;
+        switch (distanceName) {
+            case "Euclidean":
+                mm = new MixedMatrix(buildClusteringMatrix(appset), null);
+                break;
+            case "Hamming":
+                mm = new MixedMatrix(buildCategoricalMatrix(appset), null);
+                break;
+            case "Mixed":
+                mm = buildMixedMatrix(appset);
+                break;
+            default:
+                throw new IllegalStateException("Nepoznata udaljenost: " + distanceName);
+        }
+        if (mm.X[0].length == 0)
+            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
+                    + "atributa za udaljenost " + distanceName + ".");
+        return mm;
+    }
+
 
     // Dodaje rezultat klasteriranja u CLUS podatke kao k novih ciljnih
     // atributa target1..targetk.
@@ -1209,35 +1235,26 @@ public class DataSetCreator {
 
 
     protected void initialClusteringDbscan(ApplicationSettings appset) {
-        // Matrica i udaljenost ovise o DbscanDistance. Udaljenost nam ovdje
-        // treba samo za k-distance kvantile, a sam DBSCAN dobivamo iz
-        // tvornice (ispod), koja uz udaljenost provjerava i podatke.
-        double[][] X;
-        boolean[] categorical = null; // maska, samo za Mixed
+        MixedMatrix mm = buildDensityMatrix(appset.dbscanDistance, appset);
+        double[][] X = mm.X;
+        boolean[] categorical = mm.categorical; // null osim za Mixed
+        int d = X[0].length;
+
+        // Udaljenost nam ovdje treba samo za k-distance kvantile, a sam
+        // DBSCAN dobivamo iz tvornice (ispod), koja uz udaljenost
+        // provjerava i podatke.
         clusteringdensity.Distance distance;
         switch (appset.dbscanDistance) {
             case "Euclidean":
-                X = buildClusteringMatrix(appset);
                 distance = clusteringdensity.Distance.EUCLIDEAN;
                 break;
             case "Hamming":
-                X = buildCategoricalMatrix(appset);
                 distance = clusteringdensity.Distance.HAMMING;
                 break;
-            case "Mixed":
-                MixedMatrix mm = buildMixedMatrix(appset);
-                X = mm.X;
-                categorical = mm.categorical;
+            default: // Mixed, ostale vrijednosti odbija buildDensityMatrix
                 distance = clusteringdensity.Distance.mixed(categorical, appset.dbscanGamma);
                 break;
-            default:
-                throw new IllegalStateException("Nepoznat DbscanDistance: " + appset.dbscanDistance);
         }
-
-        int d = X[0].length;
-        if (d == 0)
-            throw new IllegalArgumentException("Odabrani pogled (ViewForClustering) nema "
-                    + "atributa za DbscanDistance = " + appset.dbscanDistance + ".");
 
         // ako minPts nije zadan, koristimo uobicajenu heuristiku 2*d
         int minPts = appset.dbscanMinPts > 0 ? appset.dbscanMinPts : 2 * d;
@@ -1279,22 +1296,64 @@ public class DataSetCreator {
                 break;
         }
 
-        Dbscan.Result result = db.fit(X);
-        System.out.println(result);
+        runDensityClustering("DBSCAN", db, X, appset.dbscanDistance, appset);
+    }
+
+    protected void initialClusteringHdbscan(ApplicationSettings appset) {
+        MixedMatrix mm = buildDensityMatrix(appset.hdbscanDistance, appset);
+        double[][] X = mm.X;
+        int d = X[0].length;
+
+        // Ako minPts nije zadan, ista heuristika 2*d kao kod DBSCAN-a.
+        // Ako minClusterSize nije zadan, uzimamo minPts (Campello i sur.),
+        // ali barem 2, jer s 1 sum ne postoji.
+        int minPts = appset.hdbscanMinPts > 0 ? appset.hdbscanMinPts : 2 * d;
+        int minClusterSize = appset.hdbscanMinClusterSize > 0
+                ? appset.hdbscanMinClusterSize : Math.max(2, minPts);
+
+        System.out.println("HDBSCAN initialization: distance = " + appset.hdbscanDistance
+                + ", minPts = " + minPts + (appset.hdbscanMinPts > 0 ? "" : " (heuristika 2*d)")
+                + ", minClusterSize = " + minClusterSize
+                + (appset.hdbscanMinClusterSize > 0 ? "" : " (= minPts)")
+                + ("Mixed".equals(appset.hdbscanDistance) ? ", gamma = " + appset.hdbscanGamma : ""));
+
+        Hdbscan hdb;
+        switch (appset.hdbscanDistance) {
+            case "Euclidean":
+                hdb = Hdbscan.numeric(minPts, minClusterSize);
+                break;
+            case "Hamming":
+                hdb = Hdbscan.categorical(minPts, minClusterSize);
+                break;
+            default: // Mixed, ostale vrijednosti odbija buildDensityMatrix
+                hdb = Hdbscan.mixed(minPts, minClusterSize, mm.categorical, appset.hdbscanGamma);
+                break;
+        }
+
+        runDensityClustering("HDBSCAN", hdb, X, appset.hdbscanDistance, appset);
+    }
+
+    // Zajednicki zavrsetak za DBSCAN i HDBSCAN: pokrece algoritam, ispisuje
+    // rezultat i indekse kvalitete te dodaje klastere kao ciljne atribute.
+    // Preko sucelja Densityclustering ne treba znati koji algoritam radi.
+    private void runDensityClustering(String algName, Densityclustering alg, double[][] X,
+                                      String distanceName, ApplicationSettings appset) {
+        Dbscan.Result result = alg.fit(X);
+        System.out.println(String.format(Locale.ROOT, "%s: klastera=%d, sum (noise)=%d/%d tocaka",
+                algName, result.numClusters, result.numNoise, result.labels.length));
         System.out.println(String.format(Locale.ROOT, "Udio suma: %.2f%%",
                 100.0 * result.numNoise / result.labels.length));
 
-        // Indeksi kvalitete: za Euclidean kao do sada, za Hamming silueta s
-        // Hammingovom udaljenoscu (CH i DB ispisu da nisu primjenjivi), a za
-        // Mixed ih zasad preskacemo, kao i kod k-prototypesa.
-        if (!"Mixed".equals(appset.dbscanDistance)) {
-            boolean hamming = "Hamming".equals(appset.dbscanDistance);
-            printSilhouette("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
-            printSilhouette("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
-            printCalinskiHarabasz("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
-            printCalinskiHarabasz("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
-            printDaviesBouldin("DBSCAN", result.labels, X, hamming, NoisePolicy.IGNORE);
-            printDaviesBouldin("DBSCAN", result.labels, X, hamming, NoisePolicy.SINGLETON);
+        // Indeksi kvalitete: za Euclidean i Hamming kao dosad, za Mixed ih
+        // zasad preskacemo, kao i kod k-prototypesa.
+        if (!"Mixed".equals(distanceName)) {
+            boolean hamming = "Hamming".equals(distanceName);
+            printSilhouette(algName, result.labels, X, hamming, NoisePolicy.IGNORE);
+            printSilhouette(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
+            printCalinskiHarabasz(algName, result.labels, X, hamming, NoisePolicy.IGNORE);
+            printCalinskiHarabasz(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
+            printDaviesBouldin(algName, result.labels, X, hamming, NoisePolicy.IGNORE);
+            printDaviesBouldin(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
         }
 
         addClusterTargets(result.labels, result.numClusters, appset);

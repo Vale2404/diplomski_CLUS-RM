@@ -278,6 +278,8 @@ public class SupplementingRandomForest {
 					datJInit.initialClusteringKmeans(appset, r);
 				else if ("dbscan".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringDbscan(appset);
+				else if ("hdbscan".equalsIgnoreCase(appset.initializationMethod))
+					datJInit.initialClusteringHdbscan(appset);
 				else if ("kmodes".equalsIgnoreCase(appset.initializationMethod))
 					datJInit.initialClusteringKmodes(appset, r);
 				else if ("kprototypes".equalsIgnoreCase(appset.initializationMethod))

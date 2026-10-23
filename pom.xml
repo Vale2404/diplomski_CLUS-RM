@@ -96,6 +96,22 @@ Clus is able to solve tasks such as (hierarchical) multi-label classification, (
 			<artifactId>trove4j</artifactId>
 			<version>3.0.3</version>
 		</dependency>
+		<dependency>
+			<groupId>io.github.elki-project</groupId>
+			<artifactId>elki-clustering</artifactId>
+			<version>0.8.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.elki-project</groupId>
+			<artifactId>elki-input</artifactId>
+			<version>0.8.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.elki-project</groupId>
+			<artifactId>elki-core-dbids-int</artifactId>
+			<version>0.8.0</version>
+			<scope>runtime</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

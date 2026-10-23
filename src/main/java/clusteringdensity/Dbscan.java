@@ -39,7 +39,7 @@ import java.util.Objects;
 // kMeans, kModes i kPrototypes u LloydClustering.
 
 
-public class Dbscan {
+public class Dbscan implements Densityclustering{
     private final double eps;
     private final int minPts;
     private final Distance distance;
@@ -125,6 +125,7 @@ public class Dbscan {
     // podatke i parametre (jedina "nasumicnost" je redoslijed obilaska
     // tocaka, koji ovdje uvijek ide 0..n-1, pa je rezultat u potpunosti
     // reproducibilan).
+    @Override
     public Result fit(double[][] X) {
         validateData(X);
         int n = X.length;
@@ -306,7 +307,7 @@ public class Dbscan {
     }
 
     // Metoda koja provjerava jesu li podaci u X ispravni.
-    private static void validateData(double[][] X) {
+    static void validateData(double[][] X) {
         if (X == null || X.length == 0)
             throw new IllegalArgumentException("X must not be null or empty");
         if (X[0] == null || X[0].length == 0)

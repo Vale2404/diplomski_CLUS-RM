@@ -42,6 +42,10 @@ public class ApplicationSettings {
     public int dbscanMinPts; // minPts za DBSCAN; <= 0 znaci heuristiku 2*d
     public String dbscanDistance; // Euclidean, Hamming ili Mixed
     public double dbscanGamma;    // gamma za DbscanDistance = Mixed
+    public int hdbscanMinPts;           // minPts za HDBSCAN; <= 0 znaci heuristiku 2*d
+    public int hdbscanMinClusterSize;   // najmanja velicina klastera; <= 0 znaci isto kao minPts
+    public String hdbscanDistance;      // Euclidean, Hamming ili Mixed
+    public double hdbscanGamma;         // gamma za HdbscanDistance = Mixed
 
 
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
@@ -150,6 +154,10 @@ public class ApplicationSettings {
         dbscanMinPts = -1;
         dbscanDistance = "Euclidean";
         dbscanGamma = 1.0;
+        hdbscanMinPts = -1;
+        hdbscanMinClusterSize = -1;
+        hdbscanDistance = "Euclidean";
+        hdbscanGamma = 1.0;
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -582,9 +590,10 @@ public class ApplicationSettings {
                             && !initializationMethod.equalsIgnoreCase("kmodes")
                             && !initializationMethod.equalsIgnoreCase("kprototypes")
                             && !initializationMethod.equalsIgnoreCase("dbscan")
+                            && !initializationMethod.equalsIgnoreCase("hdbscan")
                             && !initializationMethod.equalsIgnoreCase("hierarchical"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
-                                + tmp[1] + "\". allowed: default, kmeans, kmodes, kprototypes, dbscan, hierarchical.");
+                                + tmp[1] + "\". allowed: default, kmeans, kmodes, kprototypes, dbscan, hdbscan, hierarchical.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -665,6 +674,34 @@ public class ApplicationSettings {
                     dbscanGamma = Double.parseDouble(tmp[1]);
                     if (!Double.isFinite(dbscanGamma) || dbscanGamma < 0)
                         throw new IllegalArgumentException("Illegal arg. for DbscanGamma: \""
+                                + tmp[1] + "\". must be finite and >= 0.");
+                } else if (line.contains("HdbscanMinPts")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    hdbscanMinPts = Integer.parseInt(tmp[1]);
+                    if (hdbscanMinPts <= 0)
+                        throw new IllegalArgumentException("Illegal arg. for HdbscanMinPts: \"" + tmp[1] + "\". must be > 0.");
+                } else if (line.contains("HdbscanMinClusterSize")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    hdbscanMinClusterSize = Integer.parseInt(tmp[1]);
+                    if (hdbscanMinClusterSize < 2)
+                        throw new IllegalArgumentException("Illegal arg. for HdbscanMinClusterSize: \"" + tmp[1] + "\". must be >= 2.");
+                } else if (line.contains("HdbscanDistance")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("euclidean")) hdbscanDistance = "Euclidean";
+                    else if (tmp[1].equalsIgnoreCase("hamming")) hdbscanDistance = "Hamming";
+                    else if (tmp[1].equalsIgnoreCase("mixed")) hdbscanDistance = "Mixed";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for HdbscanDistance: \"" + tmp[1] + "\"." +
+                                " allowed: Euclidean, Hamming, Mixed.");
+                } else if (line.contains("HdbscanGamma")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    hdbscanGamma = Double.parseDouble(tmp[1]);
+                    if (!Double.isFinite(hdbscanGamma) || hdbscanGamma < 0)
+                        throw new IllegalArgumentException("Illegal arg. for HdbscanGamma: \""
                                 + tmp[1] + "\". must be finite and >= 0.");
                 } else if (line.contains("HierarchicalLinkage")) {
                     String tmp[] = line.split("=");
