@@ -20,6 +20,7 @@ import clusteringpartitional.Initializer;
 import clusteringpartitional.Initializers;
 import clusteringpartitional.Preprocessing;
 import clusteringpartitional.LloydClustering;
+import clusteringspectral.Spectral;
 import si.ijs.kt.clus.data.ClusSchema;
 import si.ijs.kt.clus.data.io.ARFFFile;
 import si.ijs.kt.clus.data.io.ClusReader;
@@ -1354,6 +1355,45 @@ public class DataSetCreator {
             printCalinskiHarabasz(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
             printDaviesBouldin(algName, result.labels, X, hamming, NoisePolicy.IGNORE);
             printDaviesBouldin(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
+        }
+
+        addClusterTargets(result.labels, result.numClusters, appset);
+    }
+
+    protected void initialClusteringSpectral(ApplicationSettings appset) {
+        MixedMatrix mm = buildDensityMatrix(appset.spectralDistance, appset);
+        double[][] X = mm.X;
+        int k = appset.numOfClusters;
+
+        System.out.println("Spectral initialization: distance = " + appset.spectralDistance
+                + ", k = " + k + ", n = " + X.length
+                + ", sigma = " + (appset.spectralSigma > 0 ? String.valueOf(appset.spectralSigma) : "medijan")
+                + ("Mixed".equals(appset.spectralDistance) ? ", gamma = " + appset.spectralGamma : ""));
+
+        Spectral sp;
+        switch (appset.spectralDistance) {
+            case "Euclidean":
+                sp = Spectral.numeric(k, appset.spectralSigma);
+                break;
+            case "Hamming":
+                sp = Spectral.categorical(k, appset.spectralSigma);
+                break;
+            default: // Mixed, ostale vrijednosti odbija buildDensityMatrix
+                sp = Spectral.mixed(k, appset.spectralSigma, mm.categorical, appset.spectralGamma);
+                break;
+        }
+
+        // Seed 42, kao new Random(42) kod k-meansa.
+        Spectral.Result result = sp.fit(X, 42L);
+        System.out.println(result);
+
+        // Spektralno nema suma, pa je dovoljan NoisePolicy.IGNORE.
+        // Za Mixed indekse zasad preskacemo, kao kod k-prototypesa i DBSCAN-a.
+        if (!"Mixed".equals(appset.spectralDistance)) {
+            boolean hamming = "Hamming".equals(appset.spectralDistance);
+            printSilhouette("Spectral", result.labels, X, hamming, NoisePolicy.IGNORE);
+            printCalinskiHarabasz("Spectral", result.labels, X, hamming, NoisePolicy.IGNORE);
+            printDaviesBouldin("Spectral", result.labels, X, hamming, NoisePolicy.IGNORE);
         }
 
         addClusterTargets(result.labels, result.numClusters, appset);

@@ -46,6 +46,9 @@ public class ApplicationSettings {
     public int hdbscanMinClusterSize;   // najmanja velicina klastera; <= 0 znaci isto kao minPts
     public String hdbscanDistance;      // Euclidean, Hamming ili Mixed
     public double hdbscanGamma;         // gamma za HdbscanDistance = Mixed
+    public String spectralDistance; // Euclidean, Hamming ili Mixed
+    public double spectralSigma; // sirina gaussove jezgre, 0 znaci medijan
+    public double spectralGamma;  // gamma za SpectralDistance = Mixed
 
 
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
@@ -158,6 +161,9 @@ public class ApplicationSettings {
         hdbscanMinClusterSize = -1;
         hdbscanDistance = "Euclidean";
         hdbscanGamma = 1.0;
+        spectralDistance = "Euclidean";
+        spectralSigma = 0.0;
+        spectralGamma = 1.0;
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -591,9 +597,11 @@ public class ApplicationSettings {
                             && !initializationMethod.equalsIgnoreCase("kprototypes")
                             && !initializationMethod.equalsIgnoreCase("dbscan")
                             && !initializationMethod.equalsIgnoreCase("hdbscan")
-                            && !initializationMethod.equalsIgnoreCase("hierarchical"))
+                            && !initializationMethod.equalsIgnoreCase("hierarchical")
+                            && !initializationMethod.equalsIgnoreCase("spectral"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
-                                + tmp[1] + "\". allowed: default, kmeans, kmodes, kprototypes, dbscan, hdbscan, hierarchical.");
+                                + tmp[1] + "\". allowed: default, kmeans, kmodes, kprototypes," +
+                                " dbscan, hdbscan, hierarchical, spectral.");
                 } else if (line.contains("NumOfClusters")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
@@ -702,6 +710,28 @@ public class ApplicationSettings {
                     hdbscanGamma = Double.parseDouble(tmp[1]);
                     if (!Double.isFinite(hdbscanGamma) || hdbscanGamma < 0)
                         throw new IllegalArgumentException("Illegal arg. for HdbscanGamma: \""
+                                + tmp[1] + "\". must be finite and >= 0.");
+                } else if (line.contains("SpectralDistance")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    if (tmp[1].equalsIgnoreCase("euclidean")) spectralDistance = "Euclidean";
+                    else if (tmp[1].equalsIgnoreCase("hamming")) spectralDistance = "Hamming";
+                    else if (tmp[1].equalsIgnoreCase("mixed")) spectralDistance = "Mixed";
+                    else
+                        throw new IllegalArgumentException("Illegal arg. for SpectralDistance: \"" + tmp[1] + "\"." +
+                                " allowed: Euclidean, Hamming, Mixed.");
+                } else if (line.contains("SpectralSigma")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    spectralSigma = Double.parseDouble(tmp[1]);
+                    if (!Double.isFinite(spectralSigma) || spectralSigma < 0)
+                        throw new IllegalArgumentException("Illegal arg. for SpectralSigma: \"" + tmp[1] + "\". must be > 0 and finite.");
+                } else if (line.contains("SpectralGamma")) {
+                    String tmp[] = line.split("=");
+                    tmp[1] = tmp[1].trim();
+                    spectralGamma = Double.parseDouble(tmp[1]);
+                    if (!Double.isFinite(spectralGamma) || spectralGamma < 0)
+                        throw new IllegalArgumentException("Illegal arg. for SpectralGamma: \""
                                 + tmp[1] + "\". must be finite and >= 0.");
                 } else if (line.contains("HierarchicalLinkage")) {
                     String tmp[] = line.split("=");
