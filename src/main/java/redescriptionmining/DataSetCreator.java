@@ -1103,6 +1103,26 @@ public class DataSetCreator {
         }
     }
 
+    // Silueta za mijesane podatke, s udaljenoscu sqrt(d_kprototypes).
+    // d_kprototypes je kvadrat euklidske udaljenosti nakon sto svaki kategoricki
+    // atribut zapisemo one-hot vektorom pomnozenim sa sqrt(gamma/2), pa je njen
+    // korijen obicna euklidska udaljenost, ista kakvu silueta koristi za numericke podatke.
+    private void printSilhouetteMixed(String algName, int[] labels, double[][] X,
+                                      boolean[] categorical, double gamma, NoisePolicy policy) {
+        clusteringpartitional.Distance mixed = clusteringpartitional.Distance.mixed(categorical, gamma);
+        PointDistance d = (i, j) -> Math.sqrt(mixed.dist(X[i], X[j]));
+
+        try {
+            double s = Silhouette.mean(labels, d, policy);
+            System.out.println(String.format(Locale.ROOT,
+                    "%s silueta (Mixed, gamma = %s, %s): %.4f",
+                    algName, gamma, policy, s));
+        } catch (IllegalArgumentException e) {
+            System.out.println(algName + " silueta (Mixed, " + policy
+                    + ") nije definirana: " + e.getMessage());
+        }
+    }
+
     // Ispisuje CH indeks za particiju labels nad tockama X.
     // CH za kategoricke podatke nema smisla.
     // X je standardizirana matrica iz buildClusteringMatrix, pa vrijednosti nisu
@@ -1227,7 +1247,8 @@ public class DataSetCreator {
         LloydClustering.Result result = kprototypes.fit(mm.X, new Random(42));
         int[] labels = result.labels();
         System.out.println("k-prototypes rezultat: " + result);
-        //printSilhouette("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
+        printSilhouetteMixed("k-prototypes", labels, mm.X, mm.categorical,
+                appset.kprototypesGamma, NoisePolicy.IGNORE);
         //printCalinskiHarabasz("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
         //printDaviesBouldin("k-prototypes", labels, mm.X, true, NoisePolicy.IGNORE);
 
@@ -1297,7 +1318,8 @@ public class DataSetCreator {
                 break;
         }
 
-        runDensityClustering("DBSCAN", db, X, appset.dbscanDistance, appset);
+        runDensityClustering("DBSCAN", db, X, appset.dbscanDistance,
+                categorical, appset.dbscanGamma, appset);
     }
 
     protected void initialClusteringHdbscan(ApplicationSettings appset) {
@@ -1331,23 +1353,26 @@ public class DataSetCreator {
                 break;
         }
 
-        runDensityClustering("HDBSCAN", hdb, X, appset.hdbscanDistance, appset);
+        runDensityClustering("HDBSCAN", hdb, X, appset.hdbscanDistance,
+                mm.categorical, appset.hdbscanGamma, appset);
     }
 
     // Zajednicki zavrsetak za DBSCAN i HDBSCAN: pokrece algoritam, ispisuje
     // rezultat i indekse kvalitete te dodaje klastere kao ciljne atribute.
     // Preko sucelja Densityclustering ne treba znati koji algoritam radi.
     private void runDensityClustering(String algName, Densityclustering alg, double[][] X,
-                                      String distanceName, ApplicationSettings appset) {
+                                      String distanceName, boolean[] categorical, double gamma, ApplicationSettings appset) {
         Dbscan.Result result = alg.fit(X);
         System.out.println(String.format(Locale.ROOT, "%s: klastera=%d, sum (noise)=%d/%d tocaka",
                 algName, result.numClusters, result.numNoise, result.labels.length));
         System.out.println(String.format(Locale.ROOT, "Udio suma: %.2f%%",
                 100.0 * result.numNoise / result.labels.length));
 
-        // Indeksi kvalitete: za Euclidean i Hamming kao dosad, za Mixed ih
-        // zasad preskacemo, kao i kod k-prototypesa.
-        if (!"Mixed".equals(distanceName)) {
+        // Indeksi kvalitete
+        if ("Mixed".equals(distanceName)) {
+            printSilhouetteMixed(algName, result.labels, X, categorical, gamma, NoisePolicy.IGNORE);
+            printSilhouetteMixed(algName, result.labels, X, categorical, gamma, NoisePolicy.SINGLETON);
+        } else {
             boolean hamming = "Hamming".equals(distanceName);
             printSilhouette(algName, result.labels, X, hamming, NoisePolicy.IGNORE);
             printSilhouette(algName, result.labels, X, hamming, NoisePolicy.SINGLETON);
@@ -1388,8 +1413,11 @@ public class DataSetCreator {
         System.out.println(result);
 
         // Spektralno nema suma, pa je dovoljan NoisePolicy.IGNORE.
-        // Za Mixed indekse zasad preskacemo, kao kod k-prototypesa i DBSCAN-a.
-        if (!"Mixed".equals(appset.spectralDistance)) {
+        // Za Mixed zasad samo silueta (CH i DB jos ne).
+        if ("Mixed".equals(appset.spectralDistance)) {
+            printSilhouetteMixed("Spectral", result.labels, X, mm.categorical,
+                    appset.spectralGamma, NoisePolicy.IGNORE);
+        } else {
             boolean hamming = "Hamming".equals(appset.spectralDistance);
             printSilhouette("Spectral", result.labels, X, hamming, NoisePolicy.IGNORE);
             printCalinskiHarabasz("Spectral", result.labels, X, hamming, NoisePolicy.IGNORE);
