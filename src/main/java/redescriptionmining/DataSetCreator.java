@@ -1176,7 +1176,7 @@ public class DataSetCreator {
                 + ", initializer: " + kmeansInit.name());
 
         LloydClustering kmeans = LloydClustering.kMeans(k, kmeansInit);
-        LloydClustering.Result result = kmeans.fit(X, new Random(42));
+        LloydClustering.Result result = kmeans.fit(X, r);
         int[] labels = result.labels();
         System.out.println("k-means rezultat: " + result);
         printSilhouette("k-means", labels, X, false, NoisePolicy.IGNORE);
@@ -1209,7 +1209,7 @@ public class DataSetCreator {
                 + ", initializer: " + kmodesInit.name());
 
         LloydClustering kmodes = LloydClustering.kModes(k, kmodesInit);
-        LloydClustering.Result result = kmodes.fit(X, new Random(42));
+        LloydClustering.Result result = kmodes.fit(X, r);
         int[] labels = result.labels();
         System.out.println("k-modes rezultat: " + result);
         printSilhouette("k-modes", labels, X, true, NoisePolicy.IGNORE);
@@ -1244,7 +1244,7 @@ public class DataSetCreator {
                 + ", gamma = " + appset.kprototypesGamma);
 
         LloydClustering kprototypes = LloydClustering.kPrototypes(k, kprototypesInit, mm.categorical, appset.kprototypesGamma);
-        LloydClustering.Result result = kprototypes.fit(mm.X, new Random(42));
+        LloydClustering.Result result = kprototypes.fit(mm.X, r);
         int[] labels = result.labels();
         System.out.println("k-prototypes rezultat: " + result);
         printSilhouetteMixed("k-prototypes", labels, mm.X, mm.categorical,
