@@ -16,3 +16,8 @@ buildNumber.properties
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 clusrm_waveform/out/
+clusrm_dblp/
+clusrm_waveform/
+clusrm_bio/
+clusrm_country/
+clusrm_genomi/
