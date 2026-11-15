@@ -805,32 +805,48 @@ public class DataSetCreator {
         }
 
 
-        // standardizacija matrice
+        // standardizacija matrice uz imputaciju sredinom.
+        // CLUS nedostajucu numericku vrijednost sprema kao NumericAttrType.MISSING
+        // (+beskonacno). Sredinu i standardnu devijaciju racunamo samo iz poznatih
+        // vrijednosti, a nedostajuce nakon standardizacije postavljamo na 0,
+        // tj. na sredinu atributa.
+        int numMissing = 0;
         for (int f = 0; f < d; f++) {
             double mean = 0.0;
+            int known = 0;
             for (int i = 0; i < n; i++) {
-                mean += X[i][f];
+                if (X[i][f] != NumericAttrType.MISSING) {
+                    mean += X[i][f];
+                    known++;
+                }
             }
-            mean /= n;
+            if (known > 0)
+                mean /= known;
 
             double var = 0.0;
             for (int i = 0; i < n; i++) {
-                double diff = X[i][f] - mean;
-                var += diff * diff;
-            }
-            double sd = Math.sqrt(var / n);
-
-            // konstantan stupac ne nosi informaciju, izbjegavamo dijeljenje s nulom
-            if (sd > 0.0) {
-                for (int i = 0; i < n; i++) {
-                    X[i][f] = (X[i][f] - mean) / sd;
+                if (X[i][f] != NumericAttrType.MISSING) {
+                    double diff = X[i][f] - mean;
+                    var += diff * diff;
                 }
-            } else {
-                for (int i = 0; i < n; i++) {
+            }
+            double sd = known > 0 ? Math.sqrt(var / known) : 0.0;
+
+            for (int i = 0; i < n; i++) {
+                if (X[i][f] == NumericAttrType.MISSING) {
+                    X[i][f] = 0.0;
+                    numMissing++;
+                } else if (sd > 0.0) {
+                    X[i][f] = (X[i][f] - mean) / sd;
+                } else {
+                    // konstantan stupac ne nosi informaciju, izbjegavamo dijeljenje s nulom
                     X[i][f] = 0.0;
                 }
             }
         }
+        if (numMissing > 0)
+            System.out.println("Imputacija sredinom: zamijenjeno " + numMissing
+                    + " nedostajucih vrijednosti od " + (n * d));
         return X;
     }
 
@@ -1357,6 +1373,146 @@ public class DataSetCreator {
                 mm.categorical, appset.hdbscanGamma, appset);
     }
 
+
+
+    protected void densityGrid(ApplicationSettings appset) {
+        int minPts = 20;
+        double[] epsQuantiles = {0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
+                0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95};
+        int[] minClSizeGrid = {10, 15, 20, 25, 30, 40, 50, 75, 100};
+
+        MixedMatrix mm = buildDensityMatrix(appset.hdbscanDistance, appset);
+        double[][] X = mm.X;
+        String distName = appset.hdbscanDistance;
+        double gamma = appset.hdbscanGamma;
+
+        clusteringdensity.Distance distance;
+        switch (distName) {
+            case "Euclidean": distance = clusteringdensity.Distance.EUCLIDEAN; break;
+            case "Hamming":   distance = clusteringdensity.Distance.HAMMING; break;
+            default:          distance = clusteringdensity.Distance.mixed(mm.categorical, gamma); break;
+        }
+
+        try (PrintWriter out = new PrintWriter(new OutputStreamWriter(
+                new FileOutputStream("densitygrid.tsv"), "UTF-8"))) {
+            String info = "densitygrid: view = " + appset.viewForClustering
+                    + ", distance = " + distName
+                    + ("Mixed".equals(distName) ? ", gamma = " + gamma : "")
+                    + ", n = " + X.length + ", d = " + X[0].length + ", minPts = " + minPts;
+            String header = "alg\tminPts\tparam\tk\tsum%\tsil_IGNORE\tsil_SINGLETON\tCH_IGNORE\tDB_IGNORE\tvelicine";
+            System.out.println(info);
+            System.out.println(header);
+            out.println("# " + info);
+            out.println(header);
+
+            // DBSCAN: minPts fiksan, eps = q-kvantil udaljenosti do minPts-tog susjeda
+            double[] kDist = Dbscan.kDistances(X, minPts, distance);
+            Arrays.sort(kDist);
+            double lastEps = -1;
+            for (double q : epsQuantiles) {
+                double eps = kDist[(int) Math.floor(q * (kDist.length - 1))];
+                if (eps == lastEps)
+                    continue; // isti eps kao za prethodni kvantil (cesto kod Hamminga)
+                lastEps = eps;
+                String param = String.format(Locale.ROOT, "q=%.2f,eps=%.4f", q, eps);
+                if (!(eps > 0)) {
+                    String row = "DBSCAN\t" + minPts + "\t" + param + "\t(preskoceno, eps = 0)";
+                    System.out.println(row);
+                    out.println(row);
+                    continue;
+                }
+                Dbscan db;
+                switch (distName) {
+                    case "Euclidean": db = Dbscan.numeric(eps, minPts); break;
+                    case "Hamming":   db = Dbscan.categorical(eps, minPts); break;
+                    default:          db = Dbscan.mixed(eps, minPts, mm.categorical, gamma); break;
+                }
+                printGridRow(out, "DBSCAN", minPts, param, db.fit(X), X, distName, mm.categorical, gamma);
+                out.flush();
+            }
+
+            // HDBSCAN: minPts fiksan, biramo minClusterSize
+            for (int minClSize : minClSizeGrid) {
+                if (minClSize > X.length)
+                    continue;
+                Hdbscan hdb;
+                switch (distName) {
+                    case "Euclidean": hdb = Hdbscan.numeric(minPts, minClSize); break;
+                    case "Hamming":   hdb = Hdbscan.categorical(minPts, minClSize); break;
+                    default:          hdb = Hdbscan.mixed(minPts, minClSize, mm.categorical, gamma); break;
+                }
+                printGridRow(out, "HDBSCAN", minPts, "minClSize=" + minClSize, hdb.fit(X), X,
+                        distName, mm.categorical, gamma);
+                out.flush();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Ne mogu pisati densitygrid.tsv", e);
+        }
+        System.out.println("Gotovo, tablica je i u densitygrid.tsv");
+        System.exit(0);
+    }
+
+    private void printGridRow(PrintWriter out, String alg, int minPts, String param, Dbscan.Result r,
+                              double[][] X, String distName, boolean[] categorical, double gamma) {
+        // velicine klastera, silazno
+        Integer[] sizes = new Integer[r.numClusters];
+        Arrays.fill(sizes, 0);
+        for (int l : r.labels)
+            if (l >= 0)
+                sizes[l]++;
+        Arrays.sort(sizes, Collections.reverseOrder());
+
+        String row = String.format(Locale.ROOT, "%s\t%d\t%s\t%d\t%.1f\t%s\t%s\t%s\t%s\t%s",
+                alg, minPts, param, r.numClusters, 100.0 * r.numNoise / r.labels.length,
+                gridSilhouette(r.labels, X, distName, categorical, gamma, NoisePolicy.IGNORE),
+                gridSilhouette(r.labels, X, distName, categorical, gamma, NoisePolicy.SINGLETON),
+                gridIndex("CH", r.labels, X, distName),
+                gridIndex("DB", r.labels, X, distName),
+                Arrays.toString(sizes));
+        System.out.println(row);
+        out.println(row);
+    }
+
+    // Ista udaljenost kao u printSilhouette i printSilhouetteMixed.
+    private String gridSilhouette(int[] labels, double[][] X, String distName,
+                                  boolean[] categorical, double gamma, NoisePolicy policy) {
+        PointDistance d;
+        switch (distName) {
+            case "Euclidean":
+                d = (i, j) -> clusteringpartitional.Distance.EUCLIDEAN.dist(X[i], X[j]);
+                break;
+            case "Hamming":
+                d = (i, j) -> clusteringpartitional.Distance.HAMMING.dist(X[i], X[j]);
+                break;
+            default:
+                clusteringpartitional.Distance mixed = clusteringpartitional.Distance.mixed(categorical, gamma);
+                d = (i, j) -> Math.sqrt(mixed.dist(X[i], X[j]));
+                break;
+        }
+        try {
+            return String.format(Locale.ROOT, "%.4f", Silhouette.mean(labels, d, policy));
+        } catch (IllegalArgumentException e) {
+            return "-"; // manje od dva klastera
+        }
+    }
+
+    // CH i DB uz NoisePolicy.IGNORE, samo za euklidsku udaljenost
+    // (kao u printCalinskiHarabasz i printDaviesBouldin).
+    private String gridIndex(String which, int[] labels, double[][] X, String distName) {
+        if (!"Euclidean".equals(distName))
+            return "-";
+        try {
+            double v = "CH".equals(which)
+                    ? CalinskiHarabasz.index(X, labels, NoisePolicy.IGNORE)
+                    : DaviesBouldin.index(X, labels, NoisePolicy.IGNORE);
+            return String.format(Locale.ROOT, "%.4f", v);
+        } catch (IllegalArgumentException e) {
+            return "-"; // npr. manje od dva klastera
+        }
+    }
+
+
+
     // Zajednicki zavrsetak za DBSCAN i HDBSCAN: pokrece algoritam, ispisuje
     // rezultat i indekse kvalitete te dodaje klastere kao ciljne atribute.
     // Preko sucelja Densityclustering ne treba znati koji algoritam radi.
@@ -1385,7 +1541,7 @@ public class DataSetCreator {
         addClusterTargets(result.labels, result.numClusters, appset);
     }
 
-    protected void initialClusteringSpectral(ApplicationSettings appset) {
+    protected void initialClusteringSpectral(ApplicationSettings appset, Random r) {
         MixedMatrix mm = buildDensityMatrix(appset.spectralDistance, appset);
         double[][] X = mm.X;
         int k = appset.numOfClusters;
@@ -1408,8 +1564,9 @@ public class DataSetCreator {
                 break;
         }
 
-        // Seed 42, kao new Random(42) kod k-meansa.
-        Spectral.Result result = sp.fit(X, 42L);
+        long seed = r.nextLong();
+        System.out.println("Spectral seed: " + seed);
+        Spectral.Result result = sp.fit(X, seed);
         System.out.println(result);
 
         // Spektralno nema suma, pa je dovoljan NoisePolicy.IGNORE.

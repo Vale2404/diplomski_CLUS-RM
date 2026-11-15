@@ -597,6 +597,7 @@ public class ApplicationSettings {
                             && !initializationMethod.equalsIgnoreCase("kprototypes")
                             && !initializationMethod.equalsIgnoreCase("dbscan")
                             && !initializationMethod.equalsIgnoreCase("hdbscan")
+                            && !initializationMethod.equalsIgnoreCase("densitygrid")
                             && !initializationMethod.equalsIgnoreCase("hierarchical")
                             && !initializationMethod.equalsIgnoreCase("spectral"))
                         throw new IllegalArgumentException("Illegal arg. for InitializationMethod: \""
