@@ -51,6 +51,12 @@ public class ApplicationSettings {
     public double spectralGamma;  // gamma za SpectralDistance = Mixed
 
 
+    // kombinirana inicijalizacija, npr. default:10; hdbscan:W1,W2; spectral:W2; hierarchical-ward:W1
+    public String combinedInitialization;
+    public String clusteringSettingsW1; // datoteka s parametrima klasteriranja pogleda W1
+    public String clusteringSettingsW2; // datoteka s parametrima klasteriranja pogleda W2
+
+
     public int minSupport, maxSupport, numIterations, numnewRAttr, numRetRed, numTreesinForest, aTreeDepth, numTargets, clusteringMemory, Bandwith, maxDistance, numRandomRestarts, attributeImportance, containsView, numSupplementTrees, jsType, numInitial, redesSetSizeType, legacy/*, typeOfLSTrees, typeOfRSTrees*/, optimizationType, missingValueJSType, exhaustiveTesting, ruleSizeNormalization, numThreads;
     public boolean minimizeRules, unguidedExpansion, allowSERed, useJoin, leftNegation, rightNegation, leftDisjunction, rightDisjunction, computeDMfromRules, networkInit, useNetworkAsBackground, useSplitTesting, removePValBeforeJoin;
     public double minJS, minAddRedJS, maxPval/*, JSImpWeight, PValImpWeight, AttDivImpWeight, ElemDivImpWeight, RuleSizeImpWeight*/, Alpha, percentageForTrain, RedStabilityWeight;
@@ -164,6 +170,9 @@ public class ApplicationSettings {
         spectralDistance = "Euclidean";
         spectralSigma = 0.0;
         spectralGamma = 1.0;
+        combinedInitialization = "";
+        clusteringSettingsW1 = "";
+        clusteringSettingsW2 = "";
     }
 
     public void printSettings(ApplicationSettings appset) {
@@ -311,7 +320,13 @@ public class ApplicationSettings {
             String line = null;
             int inputCount = 0, numST = 0, numNAC = 0;
             while ((line = reader.readLine()) != null) {
-                if (line.contains("JavaPath")) {
+                if (line.contains("CombinedInitialization")) {
+                    combinedInitialization = line.split("=", 2)[1].trim();
+                } else if (line.contains("ClusteringSettingsW1")) {
+                    clusteringSettingsW1 = line.split("=", 2)[1].trim();
+                } else if (line.contains("ClusteringSettingsW2")) {
+                    clusteringSettingsW2 = line.split("=", 2)[1].trim();
+                } else if (line.contains("JavaPath")) {
                     String tmp[] = line.split("=");
                     tmp[1] = tmp[1].trim();
                     javaPath = tmp[1];

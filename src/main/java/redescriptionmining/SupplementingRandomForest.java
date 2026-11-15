@@ -245,7 +245,22 @@ public class SupplementingRandomForest {
 			nclMatInit = null;
 		}
 
-		for (int runTest = 0; runTest < appset.numRandomRestarts; runTest++) {
+		// kombinirana inicijalizacija: umjesto numRandomRestarts pokretanja iste inicijalizacije
+		// izvodi se niz pokretanja zadan s CombinedInitialization
+		ArrayList<CombinedInitialization.Run> combinedRuns = null;
+		if (!appset.combinedInitialization.isEmpty()) {
+			combinedRuns = CombinedInitialization.parse(appset.combinedInitialization);
+			CombinedInitialization.saveBase(appset);
+			System.out.println("Kombinirana inicijalizacija, " + combinedRuns.size() + " pokretanja: " + combinedRuns);
+		}
+		int numRuns = (combinedRuns != null) ? combinedRuns.size() : appset.numRandomRestarts;
+
+		for (int runTest = 0; runTest < numRuns; runTest++) {
+			if (combinedRuns != null) {
+				CombinedInitialization.apply(combinedRuns.get(runTest), appset);
+				System.out.println("Kombinirana inicijalizacija, pokretanje " + (runTest + 1) + "/" + numRuns
+						+ ": " + combinedRuns.get(runTest));
+			}
 			numIter = 0;
 			rr.newRuleIndex = 0;
 			rr1.newRuleIndex = 0;
